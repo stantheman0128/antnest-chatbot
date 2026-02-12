@@ -7,18 +7,6 @@ interface FAQPair {
   response: string;
 }
 
-interface Product {
-  id: string;
-  name: string;
-  prices: Array<{ size: string; price: number }>;
-  originalPrice?: number | null;
-  description: string;
-  containsAlcohol: boolean;
-  temperature: string;
-  shippingMethod: string;
-  keywords: string[];
-}
-
 interface MatchResult {
   matched: boolean;
   response?: string;
@@ -26,11 +14,7 @@ interface MatchResult {
 }
 
 let faqPairs: FAQPair[] | null = null;
-let products: Product[] | null = null;
 
-/**
- * Load FAQ pairs from data/faq-pairs.json
- */
 function loadFAQPairs(): FAQPair[] {
   if (faqPairs) return faqPairs;
 
@@ -45,26 +29,6 @@ function loadFAQPairs(): FAQPair[] {
   }
 }
 
-/**
- * Load products from data/products.json
- */
-function loadProducts(): Product[] {
-  if (products) return products;
-
-  try {
-    const productsPath = path.join(process.cwd(), "data", "products.json");
-    const content = fs.readFileSync(productsPath, "utf-8");
-    products = JSON.parse(content);
-    return products!;
-  } catch (error) {
-    console.error("Failed to load products:", error);
-    return [];
-  }
-}
-
-/**
- * Check if message contains any keywords from a list
- */
 function containsKeywords(message: string, keywords: string[]): number {
   let count = 0;
   const lowerMessage = message.toLowerCase();
@@ -78,94 +42,87 @@ function containsKeywords(message: string, keywords: string[]): number {
   return count;
 }
 
-/**
- * Format product information for display
- */
-function formatProductInfo(product: Product): string {
-  const priceStr = product.prices
-    .map((p) => `${p.size} NT$${p.price}`)
-    .join(" / ");
+// 檢查訊息是否包含「需要 AI 推理」的信號詞
+// 推薦、比較、選擇、組合等問題都應該讓 AI 處理
+function needsAIReasoning(message: string): boolean {
+  const reasoningSignals = [
+    "推薦", "建議", "適合", "比較", "哪個好",
+    "怎麼選", "怎麼挑", "選擇", "組合", "搭配",
+    "預算", "送禮", "送人", "cp值", "值得",
+    "差別", "差異", "不同", "哪一款", "哪款",
+  ];
 
-  const discountStr = product.originalPrice
-    ? `（原價 NT$${product.originalPrice}）`
-    : "";
-
-  const alcoholStr = product.containsAlcohol
-    ? "（含酒精）"
-    : "（無酒精✅）";
-
-  return `\n📌 ${product.name} ${alcoholStr}\n價格：${priceStr}${discountStr}\n描述：${product.description}\n溫層：${product.temperature} | 運費：${product.shippingMethod}`;
+  const lowerMessage = message.toLowerCase();
+  return reasoningSignals.some((signal) => lowerMessage.includes(signal));
 }
 
 /**
- * Match user message to intent and return appropriate response
- * Supports both generic FAQ matching and product-specific queries
+ * 保守的意圖比對
+ *
+ * 設計原則：
+ * - 只處理明確、簡單的 FAQ 查詢
+ * - 需要推理、推薦、比較的問題一律交給 AI
+ * - 訊息越長，越可能需要 AI 理解上下文
+ * - greeting 只在訊息很短時觸發
  */
 export function matchIntent(message: string): MatchResult {
   if (!message || typeof message !== "string") {
     return { matched: false };
   }
 
+  const trimmed = message.trim();
   const faqs = loadFAQPairs();
-  const allProducts = loadProducts();
 
-  // First, check if the message contains product keywords
-  // This allows for product-specific queries like "提拉米蘇多少錢"
-  let bestProductMatch: Product | null = null;
-  let bestProductMatchCount = 0;
-
-  for (const product of allProducts) {
-    const matchCount = containsKeywords(message, product.keywords);
-    if (matchCount > bestProductMatchCount) {
-      bestProductMatchCount = matchCount;
-      bestProductMatch = product;
-    }
+  // 如果訊息包含推理信號詞，直接交給 AI
+  if (needsAIReasoning(trimmed)) {
+    return { matched: false };
   }
 
-  // Then, find the best matching FAQ intent
-  let bestFAQMatch: FAQPair | null = null;
-  let bestFAQMatchCount = 0;
+  // 找出所有匹配的 FAQ
+  const matches: Array<{ faq: FAQPair; count: number }> = [];
 
   for (const faq of faqs) {
-    const matchCount = containsKeywords(message, faq.keywords);
-    if (matchCount > bestFAQMatchCount) {
-      bestFAQMatchCount = matchCount;
-      bestFAQMatch = faq;
+    const count = containsKeywords(trimmed, faq.keywords);
+    if (count > 0) {
+      matches.push({ faq, count });
     }
   }
 
-  // If both product and FAQ match, use FAQ but include product info
-  if (bestFAQMatch && bestFAQMatchCount > 0) {
-    let response = bestFAQMatch.response;
+  if (matches.length === 0) {
+    return { matched: false };
+  }
 
-    // For price-related queries with product match, append product info
-    if (
-      bestProductMatch &&
-      bestProductMatchCount > 0 &&
-      (bestFAQMatch.intent === "product_price" ||
-        bestFAQMatch.intent === "product_list" ||
-        bestFAQMatch.intent === "frozen_info")
-    ) {
-      response += formatProductInfo(bestProductMatch);
+  // 按匹配數量排序
+  matches.sort((a, b) => b.count - a.count);
+  const best = matches[0];
+
+  // greeting 特殊處理：只在短訊息且沒有其他更好的匹配時觸發
+  if (best.faq.intent === "greeting") {
+    // 如果訊息很短（純打招呼），直接回應
+    if (trimmed.length <= 10) {
+      return { matched: true, response: best.faq.response, intent: "greeting" };
     }
-
-    return {
-      matched: true,
-      response,
-      intent: bestFAQMatch.intent,
-    };
+    // 訊息長但也命中了 greeting → 看有沒有其他更好的匹配
+    if (matches.length > 1) {
+      const secondBest = matches[1];
+      return {
+        matched: true,
+        response: secondBest.faq.response,
+        intent: secondBest.faq.intent,
+      };
+    }
+    // 訊息長且只有 greeting 命中 → 交給 AI
+    return { matched: false };
   }
 
-  // If only product matches (but no FAQ intent), generate a basic response
-  if (bestProductMatch && bestProductMatchCount > 0) {
-    const response = `關於 ${bestProductMatch.name}：${formatProductInfo(bestProductMatch)}`;
-    return {
-      matched: true,
-      response,
-      intent: "product_info",
-    };
+  // 長訊息（>20字）且只命中 1 個關鍵字 → 可能是誤判，交給 AI
+  if (trimmed.length > 20 && best.count === 1) {
+    return { matched: false };
   }
 
-  // No match found
-  return { matched: false };
+  return {
+    matched: true,
+    response: best.faq.response,
+    intent: best.faq.intent,
+  };
 }

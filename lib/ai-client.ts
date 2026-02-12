@@ -43,16 +43,13 @@ export async function generateAIResponse(
     const response = await client.chat.completions.create({
       model: "llama-3.1-8b-instant",
       messages,
-      max_tokens: 800,      // 縮短回答（手機友善）
-      temperature: 0.3,     // 降低創意度（更一致、更專注）
+      max_tokens: 2048,
+      temperature: 0.5,
     });
 
     const textContent = response.choices[0]?.message?.content;
 
-    console.log("Groq response:", JSON.stringify(response, null, 2));
-
     if (!textContent) {
-      console.log("No text content in response!");
       return "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com";
     }
 

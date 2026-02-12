@@ -13,10 +13,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Tier 1: Try template matching for fast, accurate FAQ responses
-    console.log("Received message:", JSON.stringify(message));
+    // Tier 1: Template matching — only for clear, simple FAQ queries
     const templateResult = matchIntent(message);
-    console.log("Template match result:", JSON.stringify(templateResult));
     if (templateResult.matched) {
       return NextResponse.json({
         response: templateResult.response,
