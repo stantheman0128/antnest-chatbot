@@ -115,8 +115,14 @@ export function matchIntent(message: string): MatchResult {
     return { matched: false };
   }
 
-  // 長訊息（>20字）且只命中 1 個關鍵字 → 可能是誤判，交給 AI
-  if (trimmed.length > 20 && best.count === 1) {
+  // 訊息超過 12 字且只命中 1 個關鍵字 → 信心不足，交給 AI
+  // 短而直接的問句（如「運費多少」「怎麼下單」）才用模板
+  if (trimmed.length > 12 && best.count === 1) {
+    return { matched: false };
+  }
+
+  // 多個意圖同分 → 意圖不明確，交給 AI
+  if (matches.length > 1 && matches[0].count === matches[1].count) {
     return { matched: false };
   }
 
