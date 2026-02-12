@@ -43,8 +43,8 @@ export async function generateAIResponse(
     const response = await client.chat.completions.create({
       model: "llama-3.1-8b-instant",
       messages,
-      max_tokens: 2048,
-      temperature: 0.7,
+      max_tokens: 800,      // 縮短回答（手機友善）
+      temperature: 0.3,     // 降低創意度（更一致、更專注）
     });
 
     const textContent = response.choices[0]?.message?.content;
