@@ -1,0 +1,67 @@
+{
+  "shipping": {
+    "methods": [
+      {
+        "name": "超商常溫取貨",
+        "applicableTo": "常溫商品（雪Q餅）",
+        "cost": 65,
+        "stores": "7-Eleven 或 全家",
+        "note": null
+      },
+      {
+        "name": "全家冷凍取貨",
+        "applicableTo": "冷凍商品（蛋糕、提拉米蘇、可麗露）",
+        "cost": 190,
+        "stores": "僅限全家",
+        "note": "冷凍商品只能選全家冷凍取貨"
+      }
+    ],
+    "freeShippingThreshold": 2000,
+    "processingTime": "下單後 7 個工作天內出貨（不含物流配送時間）",
+    "mixedOrderRule": "如果訂單同時包含冷凍和常溫商品，整筆訂單會以冷凍方式寄送（全家冷凍取貨），只收一次冷凍運費 NT$190",
+    "preOrderRule": "預購商品依照各自標示的時間出貨。如果訂單混合預購與現貨，整筆訂單依預購品的出貨時間為準",
+    "pickupWindow": "到店後 7 天內取貨"
+  },
+  "selfPickup": {
+    "meetup": {
+      "name": "面交",
+      "when": "每週日 17:00",
+      "where": "板橋車站 B1 全家",
+      "process": "結帳時選「門市取貨」→ 截圖訂單編號 → 私訊 LINE 官方帳號 → 攜帶截圖至現場",
+      "gracePeriod": "15分鐘，遲到超過15分鐘視為棄單，不予退款"
+    },
+    "studio": {
+      "name": "工作室自取",
+      "where": "新北市板橋區龍興街69號（浮洲火車站附近）",
+      "process": "結帳 → 截圖訂單編號 → 私訊 LINE 官方帳號預約取貨時間",
+      "gracePeriod": "15分鐘，遲到超過15分鐘視為棄單，不予退款",
+      "note": "需事先預約"
+    }
+  },
+  "payment": {
+    "methods": [
+      "超商取貨付款（到店付款）",
+      "信用卡（VISA、Mastercard、JCB）",
+      "Apple Pay",
+      "銀聯卡",
+      "虛擬ATM轉帳"
+    ]
+  },
+  "returnPolicy": {
+    "period": "收到商品後 7 天內",
+    "conditions": [
+      "商品須維持原包裝完整，附件及贈品皆須齊全",
+      "請勿自行寄回，先聯繫店家，審核通過後由店家安排取回",
+      "退款在退貨審核通過後 7 個工作天內處理"
+    ],
+    "nonReturnable": [
+      "超商未在期限內取貨（視為棄單，不退款）",
+      "面交遲到超過15分鐘（視為棄單，不退款）"
+    ]
+  },
+  "membership": {
+    "registrationMethods": ["Email/手機註冊", "LINE 快速註冊"],
+    "welcomeDiscount": 50,
+    "benefits": ["訂單查詢", "專屬優惠券", "收藏清單", "紅利點數"]
+  }
+}

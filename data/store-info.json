@@ -1,0 +1,36 @@
+{
+  "brandName": "螞蟻窩甜點",
+  "brandNameEn": "ANT NEST",
+  "tagline": "嚴選原料與螞蟻窩獨家比例，反覆測試每一道流程，新鮮現做",
+  "founder": "芷妍",
+  "foundedDate": "2024年9月",
+  "officialDate": "2025年3月",
+  "founderAge": 17,
+  "brandStory": "由17歲的芷妍創立，堅持「只有自己願意天天品嚐的味道，才值得分享給別人」。不追隨潮流，專注於被忽略的細節，嚴選原料、反覆調配獨家比例、手工製作。相信甜點不只是食物，更是在困難時刻的慰藉、歡聚時光的點綴、對自己的一份溫柔犒賞。",
+  "contact": {
+    "phone": "0906367231",
+    "email": "evaboxbox@gmail.com",
+    "taxId": "60027942",
+    "address": "新北市板橋區龍興街69號（浮洲火車站附近）",
+    "businessHours": "10:00 - 17:00"
+  },
+  "social": {
+    "facebook": "https://www.facebook.com/share/16T3ZeJGmY/",
+    "instagram": "https://www.instagram.com/ant.nest_dessert",
+    "line": "https://lin.ee/0Mdsdci",
+    "website": "https://antnest.cyberbiz.co/"
+  },
+  "mediaCoverage": [
+    {
+      "source": "公視",
+      "title": "考上頂大就會快樂嗎？高三衝刺期決定創業的超狂考生！",
+      "url": "https://youtu.be/RQnvnJkZ6vc"
+    },
+    {
+      "source": "非凡",
+      "title": "高三資優生的'甜點夢'｜螞蟻窩甜點｜【台灣真善美】",
+      "url": "https://youtu.be/edltEuOKbzg"
+    }
+  ],
+  "certifications": ["食品責任險", "合法商業登記"]
+}
