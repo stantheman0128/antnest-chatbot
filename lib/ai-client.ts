@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getSystemPrompt } from "./knowledge-base";
 
 interface MessageHistory {
@@ -7,47 +7,59 @@ interface MessageHistory {
 }
 
 function getAIClient() {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    throw new Error("GROQ_API_KEY environment variable is not set");
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey || apiKey === "your_google_ai_key_here") {
+    throw new Error(
+      "GOOGLE_AI_API_KEY not configured. Please:\n" +
+      "1. Visit https://aistudio.google.com/apikey\n" +
+      "2. Create a new API key\n" +
+      "3. Add it to .env.local as: GOOGLE_AI_API_KEY=your_actual_key\n" +
+      "4. Restart the development server"
+    );
   }
-  return new OpenAI({
-    apiKey,
-    baseURL: "https://api.groq.com/openai/v1"
-  });
+  return new GoogleGenerativeAI(apiKey);
 }
 
 /**
- * Generate AI response using Groq Llama 3.1 8B
- * Includes comprehensive knowledge base as system prompt
+ * Generate AI response using Google Gemini 2.5 Flash-Lite
+ * - Free tier: 1,000 requests/day
+ * - Strong instruction following and Chinese comprehension
+ * - Includes comprehensive knowledge base as system prompt
  */
 export async function generateAIResponse(
   message: string,
   history: MessageHistory[] = []
 ): Promise<string> {
   try {
-    const client = getAIClient();
-    const systemPrompt = getSystemPrompt();
-
-    const messages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      ...history
-        .filter((msg) => msg.role && msg.content)
-        .map((msg) => ({
-          role: (msg.role === "user" ? "user" : "assistant") as "user" | "assistant",
-          content: msg.content,
-        })),
-      { role: "user", content: message },
-    ];
-
-    const response = await client.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages,
-      max_tokens: 2048,
-      temperature: 0.5,
+    const genAI = getAIClient();
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-lite",
+      systemInstruction: getSystemPrompt(),
     });
 
-    const textContent = response.choices[0]?.message?.content;
+    // Convert history format to Gemini format
+    const contents = history
+      .filter((msg) => msg.role && msg.content)
+      .map((msg) => ({
+        role: msg.role === "user" ? "user" : "model",
+        parts: [{ text: msg.content }],
+      }));
+
+    // Add current message
+    contents.push({
+      role: "user",
+      parts: [{ text: message }],
+    });
+
+    const response = await model.generateContent({
+      contents,
+      generationConfig: {
+        maxOutputTokens: 2048,
+        temperature: 0.5,
+      },
+    });
+
+    const textContent = response.response.text();
 
     if (!textContent) {
       return "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com";
