@@ -1,6 +1,6 @@
 # 螞蟻窩甜點客服機器人 — 專案狀態文件
 
-最後更新：2026-02-11
+最後更新：2026-02-13（Phase 2A 實裝完成）
 
 ---
 
@@ -8,10 +8,11 @@
 
 - 專案名稱：螞蟻窩甜點 AI 客服聊天機器人
 - 目標：為螞蟻窩甜點（ANT NEST）建立智能客服，最終整合進 LINE 官方帳號
-- 狀態：MVP 已完成並部署，進入優化階段
+- 狀態：MVP 已完成並部署，進入優化階段（Phase 2A 實裝中）
 - GitHub：https://github.com/stantheman0128/antnest-chatbot
 - 線上版：https://antnest-chatbot.vercel.app
 - LINE Bot：已串接，alpha 測試中
+- **Phase 2A 進度**：✅ Code 實裝完成，等待 API Key 配置
 
 ---
 
@@ -91,21 +92,25 @@ Llama 3.1 8B 無法滿足需求：
 
 ## 四、接下來的行動計畫
 
-### Phase 2A：模型升級（優先）
+### Phase 2A：模型升級（✅ 已實裝）
 
-將 Runtime Bot 從 Llama 3.1 8B 升級到更強的模型。
+**目標**：將 Runtime Bot 從 Llama 3.1 8B 升級到 Gemini 2.5 Flash-Lite
 
-候選模型（依推薦度排序）：
+**已完成的改動**：
+- ✅ 修改 `lib/ai-client.ts`：從 OpenAI SDK (Groq) 改用 @google/generative-ai
+- ✅ 修改 `.env.local`：新增 GOOGLE_AI_API_KEY 欄位
+- ✅ 建立 `PHASE_2A_IMPLEMENTATION.md`：完整設定指南與測試清單
 
-1. Gemini 2.5 Flash — 免費 1500 req/天，中文強，指令跟隨好，速度快
-2. DeepSeek V3 — 中文最好，便宜（$0.28/$0.42 per 1M tokens）
-3. Llama 3.3 70B on Groq — 仍可用 Groq 快速推理，能力大幅提升
-4. GPT-4o-mini — 指令跟隨很強，成本適中
+**為什麼選 Gemini 2.5 Flash-Lite**：
+- 免費 1,000 requests/day（充足 MVP 測試）
+- 指令跟隨度高（解決 **粗體** 漏洩問題）
+- 中文理解強（口語化問句更容易理解）
+- 推理能力好（複雜組合問題更準確）
 
-實作改動：
-- 修改 `lib/ai-client.ts` 的 model、baseURL、API key
-- 修改 `.env.local` 的環境變數
-- 測試格式遵守、中文理解、推理能力
+**下一步**：
+- 用戶需從 https://aistudio.google.com/apikey 取得 API Key
+- 更新 `.env.local` 的實際 key（非 placeholder）
+- 重啟開發伺服器後開始測試
 
 ### Phase 2B：Prompt 架構重構
 
