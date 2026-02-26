@@ -10,11 +10,37 @@ import { generateAIResponse } from "@/lib/ai-client";
 import { buildProductCarousel, getAllProductIds } from "@/lib/flex-message";
 import { getQuickReply } from "@/lib/quick-replies";
 
+// Extend Vercel function timeout (free plan: max 60s)
+export const maxDuration = 30;
+
 function getLineClient() {
   return new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
     channelSecret: process.env.LINE_CHANNEL_SECRET || "",
   });
+}
+
+/**
+ * Show loading animation in LINE chat (the "typing..." bubble)
+ * Duration: 5-60 seconds, automatically dismissed when reply is sent
+ */
+async function showLoadingAnimation(userId: string) {
+  try {
+    await fetch("https://api.line.me/v2/bot/chat/loading/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        chatId: userId,
+        loadingSeconds: 30,
+      }),
+    });
+  } catch (error) {
+    // Non-critical, don't fail the whole request
+    console.error("Loading animation error:", error);
+  }
 }
 
 function buildWelcomeMessages(): Message[] {
@@ -29,7 +55,6 @@ function buildWelcomeMessages(): Message[] {
     quickReply: getQuickReply(false),
   };
 
-  // Show all products carousel as welcome
   const carousel = buildProductCarousel(getAllProductIds());
   const messages: Message[] = [welcomeText];
   if (carousel) messages.push(carousel);
@@ -38,15 +63,24 @@ function buildWelcomeMessages(): Message[] {
 }
 
 async function handleTextMessage(
-  event: WebhookEvent & { type: "message"; message: { type: "text"; text: string } }
+  event: WebhookEvent & {
+    type: "message";
+    message: { type: "text"; text: string };
+    source: { userId?: string };
+  }
 ) {
   const userMessage = event.message.text;
+  const userId = event.source.userId;
   console.log("LINE message received:", userMessage);
+
+  // Show loading animation while AI is thinking
+  if (userId) {
+    showLoadingAnimation(userId);
+  }
 
   const aiResponse = await generateAIResponse(userMessage, []);
   const hasProducts = aiResponse.productIds.length > 0;
 
-  // Text message with Quick Reply buttons
   const textMsg: TextMessage = {
     type: "text",
     text: aiResponse.text,
@@ -55,7 +89,6 @@ async function handleTextMessage(
 
   const messages: Message[] = [textMsg];
 
-  // Add product carousel if AI mentioned products
   if (hasProducts) {
     const carousel = buildProductCarousel(aiResponse.productIds);
     if (carousel) messages.push(carousel);
@@ -92,13 +125,11 @@ export async function POST(req: NextRequest) {
 
     await Promise.all(
       events.map(async (event) => {
-        // Handle new follower
         if (event.type === "follow") {
           await handleFollowEvent(event as any);
           return;
         }
 
-        // Handle text messages
         if (event.type === "message" && event.message.type === "text") {
           await handleTextMessage(event as any);
           return;

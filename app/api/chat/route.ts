@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAIResponse } from "@/lib/ai-client";
 
+export const maxDuration = 30;
+
 export async function POST(req: NextRequest) {
   try {
     const { message, history } = await req.json();

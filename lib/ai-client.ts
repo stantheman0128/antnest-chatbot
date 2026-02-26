@@ -82,59 +82,78 @@ function parseAIResponse(raw: string): AIResponse {
   };
 }
 
+async function callGemini(
+  message: string,
+  history: MessageHistory[]
+): Promise<string> {
+  const genAI = getAIClient();
+  const systemPrompt = getSystemPrompt() + "\n" + PRODUCT_CARD_INSTRUCTION;
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash-lite",
+    systemInstruction: systemPrompt,
+  });
+
+  const contents = history
+    .filter((msg) => msg.role && msg.content)
+    .map((msg) => ({
+      role: msg.role === "user" ? "user" : "model",
+      parts: [{ text: msg.content }],
+    }));
+
+  contents.push({
+    role: "user",
+    parts: [{ text: message }],
+  });
+
+  const response = await model.generateContent({
+    contents,
+    generationConfig: {
+      maxOutputTokens: 2048,
+      temperature: 0.5,
+    },
+  });
+
+  return response.response.text() || "";
+}
+
+const FALLBACK: AIResponse = {
+  text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+  productIds: [],
+};
+
 /**
  * Generate AI response using Google Gemini 2.5 Flash-Lite
- * Returns text + optional product IDs for Flex Message cards
+ * Includes automatic retry on first failure (handles cold start / rate limit)
  */
 export async function generateAIResponse(
   message: string,
   history: MessageHistory[] = []
 ): Promise<AIResponse> {
-  try {
-    const genAI = getAIClient();
-    const systemPrompt = getSystemPrompt() + "\n" + PRODUCT_CARD_INSTRUCTION;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const textContent = await callGemini(message, history);
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
-      systemInstruction: systemPrompt,
-    });
+      if (!textContent) {
+        return {
+          text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+          productIds: [],
+        };
+      }
 
-    const contents = history
-      .filter((msg) => msg.role && msg.content)
-      .map((msg) => ({
-        role: msg.role === "user" ? "user" : "model",
-        parts: [{ text: msg.content }],
-      }));
+      return parseAIResponse(textContent);
+    } catch (error) {
+      console.error(`AI generation error (attempt ${attempt + 1}):`, error);
 
-    contents.push({
-      role: "user",
-      parts: [{ text: message }],
-    });
+      // Retry once on failure
+      if (attempt === 0) {
+        console.log("Retrying Gemini API call...");
+        continue;
+      }
 
-    const response = await model.generateContent({
-      contents,
-      generationConfig: {
-        maxOutputTokens: 2048,
-        temperature: 0.5,
-      },
-    });
-
-    const textContent = response.response.text();
-
-    if (!textContent) {
-      return {
-        text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
-        productIds: [],
-      };
+      return FALLBACK;
     }
-
-    return parseAIResponse(textContent);
-  } catch (error) {
-    console.error("AI generation error:", error);
-
-    return {
-      text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
-      productIds: [],
-    };
   }
+
+  return FALLBACK;
 }
