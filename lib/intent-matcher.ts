@@ -50,6 +50,7 @@ function needsAIReasoning(message: string): boolean {
     "怎麼選", "怎麼挑", "選擇", "組合", "搭配",
     "預算", "送禮", "送人", "cp值", "值得",
     "差別", "差異", "不同", "哪一款", "哪款",
+    "過敏", "客製", "訂做", "生日", "幾個人吃",
   ];
 
   const lowerMessage = message.toLowerCase();

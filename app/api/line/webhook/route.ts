@@ -3,10 +3,12 @@ import { Client, WebhookEvent, TextMessage } from "@line/bot-sdk";
 import { matchIntent } from "@/lib/intent-matcher";
 import { generateAIResponse } from "@/lib/ai-client";
 
-const client = new Client({
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
-  channelSecret: process.env.LINE_CHANNEL_SECRET || "",
-});
+function getLineClient() {
+  return new Client({
+    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
+    channelSecret: process.env.LINE_CHANNEL_SECRET || "",
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Reply to user
-        await client.replyMessage(event.replyToken, {
+        await getLineClient().replyMessage(event.replyToken, {
           type: "text",
           text: replyText,
         } as TextMessage);
