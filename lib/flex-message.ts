@@ -24,57 +24,89 @@ function loadProductCards(): ProductCards {
 }
 
 const BRAND_COLOR = "#8B5E3C";
-const BRAND_LIGHT = "#F5E6D3";
+const BRAND_DARK = "#6B4226";
 const GRAY = "#999999";
 
 function buildBubble(product: ProductCard): FlexBubble {
-  // Badge row
-  const badgeContents = product.badges.map((badge) => ({
-    type: "text" as const,
-    text: badge,
-    size: "xxs" as const,
-    color: BRAND_COLOR,
-    flex: 0,
+  // Floating badge overlays on the hero image
+  const badgeOverlays: any[] = product.badges.map((badge, i) => ({
+    type: "box",
+    layout: "horizontal",
+    contents: [
+      {
+        type: "text",
+        text: badge,
+        size: "xxs",
+        color: "#FFFFFF",
+        flex: 0,
+      },
+    ],
+    position: "absolute",
+    offsetTop: `${8 + i * 28}px`,
+    offsetStart: "8px",
+    backgroundColor: i === 0 ? "#D2691ECC" : "#00000088",
+    cornerRadius: "xl",
+    paddingAll: "4px",
+    paddingStart: "10px",
+    paddingEnd: "10px",
   }));
 
-  // Price section with optional original price
-  const priceContents: any[] = [
-    {
-      type: "text",
-      text: product.price,
-      size: "lg",
-      color: BRAND_COLOR,
-      weight: "bold",
-      flex: 0,
-    },
-  ];
-
-  if (product.originalPrice) {
-    priceContents.push({
-      type: "text",
-      text: product.originalPrice,
-      size: "sm",
-      color: GRAY,
-      decoration: "line-through",
-      flex: 0,
-      margin: "sm",
-    });
-  }
+  // Price with optional strikethrough original price using spans
+  const priceContent: any = product.originalPrice
+    ? {
+        type: "text",
+        contents: [
+          {
+            type: "span",
+            text: product.price,
+            size: "lg",
+            weight: "bold",
+            color: BRAND_COLOR,
+          },
+          {
+            type: "span",
+            text: "  ",
+          },
+          {
+            type: "span",
+            text: product.originalPrice,
+            size: "sm",
+            color: GRAY,
+            decoration: "line-through",
+          },
+        ],
+      }
+    : {
+        type: "text",
+        text: product.price,
+        size: "lg",
+        color: BRAND_COLOR,
+        weight: "bold",
+      };
 
   return {
     type: "bubble",
     size: "kilo",
     hero: {
-      type: "image",
-      url: product.image,
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-      action: {
-        type: "uri",
-        label: "查看商品",
-        uri: product.url,
-      },
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "image",
+          url: product.image,
+          size: "full",
+          aspectRatio: "20:13",
+          aspectMode: "cover",
+          action: {
+            type: "uri",
+            label: "查看商品",
+            uri: product.url,
+          },
+        },
+        // Badge overlays
+        ...badgeOverlays,
+      ],
+      paddingAll: "0px",
     },
     body: {
       type: "box",
@@ -89,14 +121,6 @@ function buildBubble(product: ProductCard): FlexBubble {
           wrap: true,
           color: "#333333",
         },
-        // Badges
-        {
-          type: "box",
-          layout: "horizontal",
-          contents: badgeContents,
-          spacing: "sm",
-          margin: "sm",
-        },
         // Description
         {
           type: "text",
@@ -104,19 +128,20 @@ function buildBubble(product: ProductCard): FlexBubble {
           size: "xs",
           color: "#666666",
           wrap: true,
-          margin: "md",
+          margin: "sm",
         },
-        // Price row
+        // Price row with spans
         {
           type: "box",
           layout: "horizontal",
-          contents: priceContents,
+          contents: [priceContent],
           margin: "lg",
           alignItems: "center",
         },
       ],
       spacing: "none",
       paddingAll: "16px",
+      cornerRadius: "none",
     },
     footer: {
       type: "box",
@@ -135,6 +160,17 @@ function buildBubble(product: ProductCard): FlexBubble {
         },
       ],
       paddingAll: "12px",
+      background: {
+        type: "linearGradient",
+        angle: "0deg",
+        startColor: "#F5E6D310",
+        endColor: "#F5E6D360",
+      },
+    },
+    styles: {
+      hero: {
+        separator: false,
+      },
     },
   } as FlexBubble;
 }

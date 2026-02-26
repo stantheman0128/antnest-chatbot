@@ -3,6 +3,7 @@ import {
   Client,
   WebhookEvent,
   TextMessage,
+  StickerMessage,
   FlexMessage,
   Message,
 } from "@line/bot-sdk";
@@ -44,6 +45,13 @@ async function showLoadingAnimation(userId: string) {
 }
 
 function buildWelcomeMessages(): Message[] {
+  // Animated sticker: Brown waving (package 11537)
+  const sticker: StickerMessage = {
+    type: "sticker",
+    packageId: "11537",
+    stickerId: "52002734",
+  };
+
   const welcomeText: TextMessage = {
     type: "text",
     text:
@@ -56,7 +64,7 @@ function buildWelcomeMessages(): Message[] {
   };
 
   const carousel = buildProductCarousel(getAllProductIds());
-  const messages: Message[] = [welcomeText];
+  const messages: Message[] = [sticker, welcomeText];
   if (carousel) messages.push(carousel);
 
   return messages;

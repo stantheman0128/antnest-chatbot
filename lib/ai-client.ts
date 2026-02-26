@@ -52,6 +52,35 @@ classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-
 </product_cards>
 `;
 
+/**
+ * Strip markdown syntax from AI response text.
+ * Gemini tends to output markdown regardless of instructions,
+ * so we clean it up before sending to LINE (which doesn't render markdown).
+ */
+function stripMarkdown(text: string): string {
+  return (
+    text
+      // Bold: **text** or __text__
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/__(.+?)__/g, "$1")
+      // Italic: *text* or _text_ (but not emoji patterns like *_*)
+      .replace(/(?<!\w)\*([^*\n]+?)\*(?!\w)/g, "$1")
+      .replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, "$1")
+      // Headers: # ## ### etc at line start
+      .replace(/^#{1,6}\s+/gm, "")
+      // Inline code: `text`
+      .replace(/`([^`]+?)`/g, "$1")
+      // Links: [text](url) → text
+      .replace(/\[([^\]]+?)\]\([^)]+?\)/g, "$1")
+      // Unordered list markers: - or * at line start → •
+      .replace(/^[\s]*[-*]\s+/gm, "• ")
+      // Blockquotes: > at line start
+      .replace(/^>\s?/gm, "")
+      // Horizontal rules: --- or *** or ___
+      .replace(/^[-*_]{3,}\s*$/gm, "")
+  );
+}
+
 function parseAIResponse(raw: string): AIResponse {
   const lines = raw.split("\n");
   const productIds: string[] = [];
@@ -77,7 +106,7 @@ function parseAIResponse(raw: string): AIResponse {
   }
 
   return {
-    text: textLines.join("\n"),
+    text: stripMarkdown(textLines.join("\n")),
     productIds,
   };
 }
