@@ -48,6 +48,61 @@ antnest-chatbot/
 └── LINE_SETUP.md           # LINE Bot 部署指南
 ```
 
+## Running Modes
+
+There are three ways to run this chatbot, each suited to a different use case:
+
+### Local (本地開發)
+
+Runs the Next.js dev server on your own machine. Best for development and testing before deploying.
+
+- The web chat UI is served at `http://localhost:3000`
+- Changes to code are reflected immediately (hot reload)
+- API keys are read from `.env.local` on your filesystem
+- The LINE webhook **cannot** receive messages from LINE in this mode (LINE requires a public HTTPS URL); use a tunnel tool like `ngrok` if you need to test LINE locally
+
+```bash
+npm install
+# add GOOGLE_AI_API_KEY (and LINE keys if needed) to .env.local
+npm run dev
+# open http://localhost:3000
+```
+
+### Background (背景服務)
+
+Runs the production build as a long-lived Node.js process on a server you control (e.g. a VPS or on-prem machine). This is useful when you want a stable, always-on deployment without depending on a managed cloud platform.
+
+- Build once, then start the server process in the background
+- The process keeps running after you log out (use `pm2`, `nohup`, or a systemd service)
+- You are responsible for the server, SSL termination (required for LINE webhook), and uptime
+
+```bash
+npm run build
+# run in background with pm2 (install once: npm i -g pm2)
+pm2 start npm --name antnest-chatbot -- start
+```
+
+### Cloud (雲端部署)
+
+Deploys to a managed platform (Vercel is the default choice for this project). This is the recommended mode for production.
+
+- Push to the `main` branch → Vercel automatically builds and deploys
+- LINE webhook is publicly reachable over HTTPS with no extra configuration
+- Environment variables are set in the Vercel Dashboard (not `.env.local`)
+- Serverless architecture means no idle cost; each API call spins up on demand
+
+See [LINE_SETUP.md](./LINE_SETUP.md) for the full Vercel + LINE setup guide.
+
+---
+
+| | Local | Background | Cloud |
+|---|---|---|---|
+| **Best for** | Development & testing | Self-hosted production | Managed production |
+| **LINE webhook** | ❌ Needs tunnel | ✅ With SSL setup | ✅ Out of the box |
+| **Always-on** | No (manual start) | Yes (process manager) | Yes (Vercel serverless) |
+| **Env vars** | `.env.local` | `.env.local` / system env | Vercel Dashboard |
+| **Cost** | Free | Server cost | Free (Vercel hobby tier) |
+
 ## 本地開發
 
 1. 安裝依賴
@@ -57,7 +112,7 @@ npm install
 
 2. 設定環境變數（`.env.local`）
 ```env
-GROQ_API_KEY=your_groq_api_key
+GOOGLE_AI_API_KEY=your_google_ai_key
 LINE_CHANNEL_ACCESS_TOKEN=your_line_token
 LINE_CHANNEL_SECRET=your_line_secret
 ```
