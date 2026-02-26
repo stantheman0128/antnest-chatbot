@@ -5,9 +5,11 @@ import { FlexBubble, FlexCarousel, FlexMessage } from "@line/bot-sdk";
 interface ProductCard {
   name: string;
   price: string;
+  originalPrice: string | null;
+  description: string;
   image: string;
   url: string;
-  tags: string[];
+  badges: string[];
 }
 
 type ProductCards = Record<string, ProductCard>;
@@ -21,58 +23,120 @@ function loadProductCards(): ProductCards {
   return productCards!;
 }
 
+const BRAND_COLOR = "#8B5E3C";
+const BRAND_LIGHT = "#F5E6D3";
+const GRAY = "#999999";
+
 function buildBubble(product: ProductCard): FlexBubble {
+  // Badge row
+  const badgeContents = product.badges.map((badge) => ({
+    type: "text" as const,
+    text: badge,
+    size: "xxs" as const,
+    color: BRAND_COLOR,
+    flex: 0,
+  }));
+
+  // Price section with optional original price
+  const priceContents: any[] = [
+    {
+      type: "text",
+      text: product.price,
+      size: "lg",
+      color: BRAND_COLOR,
+      weight: "bold",
+      flex: 0,
+    },
+  ];
+
+  if (product.originalPrice) {
+    priceContents.push({
+      type: "text",
+      text: product.originalPrice,
+      size: "sm",
+      color: GRAY,
+      decoration: "line-through",
+      flex: 0,
+      margin: "sm",
+    });
+  }
+
   return {
     type: "bubble",
-    size: "micro",
+    size: "kilo",
     hero: {
       type: "image",
       url: product.image,
       size: "full",
-      aspectRatio: "4:3",
+      aspectRatio: "20:13",
       aspectMode: "cover",
+      action: {
+        type: "uri",
+        label: "查看商品",
+        uri: product.url,
+      },
     },
     body: {
       type: "box",
       layout: "vertical",
       contents: [
+        // Product name
         {
           type: "text",
           text: product.name,
           weight: "bold",
-          size: "sm",
+          size: "md",
           wrap: true,
+          color: "#333333",
         },
+        // Badges
         {
-          type: "text",
-          text: product.price,
-          color: "#8B5E3C",
-          size: "sm",
+          type: "box",
+          layout: "horizontal",
+          contents: badgeContents,
+          spacing: "sm",
           margin: "sm",
         },
+        // Description
+        {
+          type: "text",
+          text: product.description,
+          size: "xs",
+          color: "#666666",
+          wrap: true,
+          margin: "md",
+        },
+        // Price row
+        {
+          type: "box",
+          layout: "horizontal",
+          contents: priceContents,
+          margin: "lg",
+          alignItems: "center",
+        },
       ],
-      spacing: "sm",
-      paddingAll: "12px",
+      spacing: "none",
+      paddingAll: "16px",
     },
     footer: {
       type: "box",
-      layout: "vertical",
+      layout: "horizontal",
       contents: [
         {
           type: "button",
           action: {
             type: "uri",
-            label: "立即選購",
+            label: "立即選購 🛒",
             uri: product.url,
           },
           style: "primary",
-          color: "#8B5E3C",
+          color: BRAND_COLOR,
           height: "sm",
         },
       ],
       paddingAll: "12px",
     },
-  };
+  } as FlexBubble;
 }
 
 /**
@@ -93,7 +157,6 @@ export function buildProductCarousel(
 
   if (bubbles.length === 0) return null;
 
-  // LINE carousel max 12 bubbles
   const carousel: FlexCarousel = {
     type: "carousel",
     contents: bubbles.slice(0, 12),
