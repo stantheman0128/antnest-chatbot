@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Client, WebhookEvent, TextMessage } from "@line/bot-sdk";
-import { matchIntent } from "@/lib/intent-matcher";
 import { generateAIResponse } from "@/lib/ai-client";
 
 function getLineClient() {
@@ -19,7 +18,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No signature" }, { status: 400 });
     }
 
-    // LINE SDK will verify signature
     const events: WebhookEvent[] = JSON.parse(body).events;
 
     await Promise.all(
@@ -31,21 +29,9 @@ export async function POST(req: NextRequest) {
         const userMessage = event.message.text;
         console.log("LINE message received:", userMessage);
 
-        // Tier 1: Template matching
-        const templateResult = matchIntent(userMessage);
+        const replyText = await generateAIResponse(userMessage, []);
+        console.log("LINE: AI response sent");
 
-        let replyText: string;
-
-        if (templateResult.matched) {
-          replyText = templateResult.response!;
-          console.log("LINE: Template match -", templateResult.intent);
-        } else {
-          // Tier 2: AI response
-          replyText = await generateAIResponse(userMessage, []);
-          console.log("LINE: AI response");
-        }
-
-        // Reply to user
         await getLineClient().replyMessage(event.replyToken, {
           type: "text",
           text: replyText,
