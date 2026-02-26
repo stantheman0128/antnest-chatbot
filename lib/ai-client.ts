@@ -6,6 +6,21 @@ interface MessageHistory {
   content: string;
 }
 
+export interface AIResponse {
+  text: string;
+  productIds: string[];
+}
+
+const VALID_PRODUCT_IDS = [
+  "classic-tiramisu",
+  "oreo-tiramisu",
+  "super-crispy-tiramisu",
+  "luxe-cheesecake",
+  "legall-cheesecake",
+  "canele",
+  "snowflake-cookies",
+];
+
 function getAIClient() {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey || apiKey === "your_google_ai_key_here") {
@@ -20,24 +35,70 @@ function getAIClient() {
   return new GoogleGenerativeAI(apiKey);
 }
 
+const PRODUCT_CARD_INSTRUCTION = `
+<product_cards>
+當你的回覆中提到具體商品時，請在回覆的最後一行加上：
+SHOW_PRODUCTS: product-id-1, product-id-2
+
+可用的 product ID：
+classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-cheesecake, canele, snowflake-cookies
+
+規則：
+- 只在提到具體商品時才加 SHOW_PRODUCTS
+- 一般閒聊、運費、付款等問題不需要加
+- 最多顯示 5 個商品
+- 如果顧客問「有什麼甜點」或「全部品項」，顯示全部 7 個
+- SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
+</product_cards>
+`;
+
+function parseAIResponse(raw: string): AIResponse {
+  const lines = raw.split("\n");
+  const productIds: string[] = [];
+  const textLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("SHOW_PRODUCTS:")) {
+      const ids = trimmed
+        .replace("SHOW_PRODUCTS:", "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => VALID_PRODUCT_IDS.includes(id));
+      productIds.push(...ids);
+    } else {
+      textLines.push(line);
+    }
+  }
+
+  // Remove trailing empty lines
+  while (textLines.length > 0 && textLines[textLines.length - 1].trim() === "") {
+    textLines.pop();
+  }
+
+  return {
+    text: textLines.join("\n"),
+    productIds,
+  };
+}
+
 /**
  * Generate AI response using Google Gemini 2.5 Flash-Lite
- * - Free tier: 1,000 requests/day
- * - Strong instruction following and Chinese comprehension
- * - Includes comprehensive knowledge base as system prompt
+ * Returns text + optional product IDs for Flex Message cards
  */
 export async function generateAIResponse(
   message: string,
   history: MessageHistory[] = []
-): Promise<string> {
+): Promise<AIResponse> {
   try {
     const genAI = getAIClient();
+    const systemPrompt = getSystemPrompt() + "\n" + PRODUCT_CARD_INSTRUCTION;
+
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash-lite",
-      systemInstruction: getSystemPrompt(),
+      systemInstruction: systemPrompt,
     });
 
-    // Convert history format to Gemini format
     const contents = history
       .filter((msg) => msg.role && msg.content)
       .map((msg) => ({
@@ -45,7 +106,6 @@ export async function generateAIResponse(
         parts: [{ text: msg.content }],
       }));
 
-    // Add current message
     contents.push({
       role: "user",
       parts: [{ text: message }],
@@ -62,13 +122,19 @@ export async function generateAIResponse(
     const textContent = response.response.text();
 
     if (!textContent) {
-      return "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com";
+      return {
+        text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+        productIds: [],
+      };
     }
 
-    return textContent;
+    return parseAIResponse(textContent);
   } catch (error) {
     console.error("AI generation error:", error);
 
-    return "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com";
+    return {
+      text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+      productIds: [],
+    };
   }
 }

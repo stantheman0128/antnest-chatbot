@@ -1,0 +1,51 @@
+{
+  "classic-tiramisu": {
+    "name": "經典提拉米蘇",
+    "price": "NT$290 / NT$330",
+    "image": "https://antnest-chatbot.vercel.app/images/classic-tiramisu-plated.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/classic-tiramisu",
+    "tags": ["提拉米蘇", "經典", "招牌", "咖啡酒"]
+  },
+  "oreo-tiramisu": {
+    "name": "極濃奧利奧提拉米蘇",
+    "price": "NT$300",
+    "image": "https://antnest-chatbot.vercel.app/images/oreo-tiramisu-with-box.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/oreo-tiramisu",
+    "tags": ["提拉米蘇", "奧利奧", "Oreo", "無酒精"]
+  },
+  "super-crispy-tiramisu": {
+    "name": "超級脆脆提拉米蘇",
+    "price": "NT$379 / NT$420",
+    "image": "https://antnest-chatbot.vercel.app/images/classic-tiramisu-with-box.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/black-chocolate-tiramisu",
+    "tags": ["提拉米蘇", "脆脆", "杜拜", "開心果", "榛果"]
+  },
+  "luxe-cheesecake": {
+    "name": "北海道 LUXE 雲之丘巴斯克",
+    "price": "NT$370 / NT$590 / NT$750",
+    "image": "https://antnest-chatbot.vercel.app/images/luxe-cheesecake-side.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/luxe-cheesecake",
+    "tags": ["巴斯克", "起司", "乳酪", "北海道"]
+  },
+  "legall-cheesecake": {
+    "name": "法國 Le Gall 重乳酪蛋糕",
+    "price": "NT$99",
+    "image": "https://antnest-chatbot.vercel.app/images/plain-cheesecake-full.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/legall-cheesecake",
+    "tags": ["乳酪", "起司", "Le Gall", "法國", "便宜"]
+  },
+  "canele": {
+    "name": "法式經典可麗露",
+    "price": "NT$70",
+    "image": "https://antnest-chatbot.vercel.app/images/canele-whole.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/canele",
+    "tags": ["可麗露", "法式", "焦糖"]
+  },
+  "snowflake-cookies": {
+    "name": "經典口袋雪Q餅",
+    "price": "NT$150 ~ NT$170",
+    "image": "https://antnest-chatbot.vercel.app/images/snowflake-cookies-cubes.jpeg",
+    "url": "https://antnest.cyberbiz.co/products/snowflake-cookies",
+    "tags": ["雪Q餅", "餅乾", "常溫", "團購"]
+  }
+}

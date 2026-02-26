@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
 
     const aiResponse = await generateAIResponse(message, history || []);
     return NextResponse.json({
-      response: aiResponse,
+      response: aiResponse.text,
+      productIds: aiResponse.productIds,
       source: "ai",
     });
   } catch (error) {
@@ -23,6 +24,7 @@ export async function POST(req: NextRequest) {
       {
         response:
           "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+        productIds: [],
         source: "error",
       },
       { status: 500 }

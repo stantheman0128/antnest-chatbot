@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Client, WebhookEvent, TextMessage } from "@line/bot-sdk";
+import { Client, WebhookEvent, TextMessage, FlexMessage } from "@line/bot-sdk";
 import { generateAIResponse } from "@/lib/ai-client";
+import { buildProductCarousel } from "@/lib/flex-message";
 
 function getLineClient() {
   return new Client({
@@ -29,13 +30,29 @@ export async function POST(req: NextRequest) {
         const userMessage = event.message.text;
         console.log("LINE message received:", userMessage);
 
-        const replyText = await generateAIResponse(userMessage, []);
-        console.log("LINE: AI response sent");
+        const aiResponse = await generateAIResponse(userMessage, []);
 
-        await getLineClient().replyMessage(event.replyToken, {
-          type: "text",
-          text: replyText,
-        } as TextMessage);
+        // Build messages array: text + optional product cards
+        const messages: (TextMessage | FlexMessage)[] = [
+          { type: "text", text: aiResponse.text },
+        ];
+
+        // Add product carousel if AI mentioned specific products
+        if (aiResponse.productIds.length > 0) {
+          const carousel = buildProductCarousel(aiResponse.productIds);
+          if (carousel) {
+            messages.push(carousel);
+          }
+        }
+
+        console.log(
+          "LINE: AI response sent",
+          aiResponse.productIds.length > 0
+            ? `with ${aiResponse.productIds.length} product cards`
+            : "(text only)"
+        );
+
+        await getLineClient().replyMessage(event.replyToken, messages);
       })
     );
 
