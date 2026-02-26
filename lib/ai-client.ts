@@ -44,11 +44,11 @@ SHOW_PRODUCTS: product-id-1, product-id-2
 classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-cheesecake, canele, snowflake-cookies
 
 規則：
-- 只在提到具體商品時才加 SHOW_PRODUCTS
-- 一般閒聊、運費、付款等問題不需要加
-- 最多顯示 5 個商品
-- 如果顧客問「有什麼甜點」或「全部品項」，顯示全部 7 個
-- SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
+• 只在提到具體商品時才加 SHOW_PRODUCTS
+• 一般閒聊、運費、付款等問題不需要加
+• 最多顯示 5 個商品
+• 如果顧客問「有什麼甜點」或「全部品項」，顯示全部 7 個
+• SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
 </product_cards>
 `;
 
