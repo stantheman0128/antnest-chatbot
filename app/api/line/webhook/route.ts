@@ -7,7 +7,7 @@ import {
   FlexMessage,
   Message,
 } from "@line/bot-sdk";
-import { generateAIResponse } from "@/lib/ai-client";
+import { generateAIResponse, splitResponse } from "@/lib/ai-client";
 import { buildProductCarousel, getAllProductIds } from "@/lib/flex-message";
 import { getQuickReply } from "@/lib/quick-replies";
 
@@ -89,13 +89,20 @@ async function handleTextMessage(
   const aiResponse = await generateAIResponse(userMessage, []);
   const hasProducts = aiResponse.productIds.length > 0;
 
-  const textMsg: TextMessage = {
-    type: "text",
-    text: aiResponse.text,
-    quickReply: getQuickReply(hasProducts),
-  };
+  // Split long responses into multiple messages
+  // LINE reply API max 5 messages, reserve slots for carousel
+  const maxTextSegments = hasProducts ? 2 : 3;
+  const segments = splitResponse(aiResponse.text, maxTextSegments);
 
-  const messages: Message[] = [textMsg];
+  const textMessages: TextMessage[] = segments.map((seg) => ({
+    type: "text",
+    text: seg,
+  }));
+
+  // Attach quick reply to the last text message
+  textMessages[textMessages.length - 1].quickReply = getQuickReply(hasProducts);
+
+  const messages: Message[] = [...textMessages];
 
   if (hasProducts) {
     const carousel = buildProductCarousel(aiResponse.productIds);

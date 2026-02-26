@@ -111,6 +111,49 @@ function parseAIResponse(raw: string): AIResponse {
   };
 }
 
+/**
+ * Split a long response into multiple shorter messages at paragraph breaks.
+ * LINE chats are easier to read as multiple short bubbles than one wall of text.
+ * Returns 1~3 segments max (LINE reply API limit is 5 messages total).
+ */
+export function splitResponse(text: string, maxSegments = 3): string[] {
+  const trimmed = text.trim();
+
+  // Short enough → don't split
+  const lineCount = trimmed.split("\n").length;
+  if (lineCount <= 8) return [trimmed];
+
+  // Split at double-newline paragraph breaks
+  const paragraphs = trimmed.split(/\n{2,}/);
+
+  if (paragraphs.length <= 1) return [trimmed];
+
+  // Merge paragraphs into segments, keeping each under ~8 lines
+  const segments: string[] = [];
+  let current = "";
+
+  for (const para of paragraphs) {
+    const combined = current ? current + "\n\n" + para : para;
+    const combinedLines = combined.split("\n").length;
+
+    if (combinedLines > 8 && current) {
+      segments.push(current.trim());
+      current = para;
+    } else {
+      current = combined;
+    }
+  }
+  if (current.trim()) segments.push(current.trim());
+
+  // Cap at maxSegments — merge overflow into last segment
+  while (segments.length > maxSegments) {
+    const last = segments.pop()!;
+    segments[segments.length - 1] += "\n\n" + last;
+  }
+
+  return segments.filter((s) => s.length > 0);
+}
+
 async function callGemini(
   message: string,
   history: MessageHistory[]
