@@ -40,5 +40,12 @@ next-env.d.ts
 *.swo
 *~
 
+# Scripts
+*.py
+product_image_urls.json
+
+# Reference (local only)
+reference/
+
 # OS
 Thumbs.db
