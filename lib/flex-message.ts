@@ -36,19 +36,20 @@ function buildBubble(product: ProductCard): FlexBubble {
       {
         type: "text",
         text: badge,
-        size: "xxs",
+        size: "sm",
         color: "#FFFFFF",
         flex: 0,
+        weight: "bold",
       },
     ],
     position: "absolute",
-    offsetTop: `${8 + i * 28}px`,
+    offsetTop: `${8 + i * 34}px`,
     offsetStart: "8px",
     backgroundColor: i === 0 ? "#D2691ECC" : "#00000088",
     cornerRadius: "xl",
-    paddingAll: "4px",
-    paddingStart: "10px",
-    paddingEnd: "10px",
+    paddingAll: "6px",
+    paddingStart: "12px",
+    paddingEnd: "12px",
   }));
 
   // Price with optional strikethrough original price using spans
