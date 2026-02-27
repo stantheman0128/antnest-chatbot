@@ -127,6 +127,29 @@ async function handleFollowEvent(
   await getLineClient().replyMessage(event.replyToken, messages);
 }
 
+/**
+ * Forward the raw webhook request to CYBERBIZ so their integration continues working.
+ * Fire-and-forget: we don't wait for their response or let their errors affect us.
+ */
+async function forwardToCyberbiz(body: string, signature: string) {
+  const cyberbizUrl = process.env.CYBERBIZ_WEBHOOK_URL;
+  if (!cyberbizUrl) return;
+
+  try {
+    await fetch(cyberbizUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-line-signature": signature,
+      },
+      body,
+    });
+  } catch (error) {
+    // Don't let CYBERBIZ errors break our chatbot
+    console.error("CYBERBIZ forward error:", error);
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
@@ -135,6 +158,9 @@ export async function POST(req: NextRequest) {
     if (!signature) {
       return NextResponse.json({ error: "No signature" }, { status: 400 });
     }
+
+    // Forward to CYBERBIZ in parallel (fire-and-forget)
+    forwardToCyberbiz(body, signature);
 
     const events: WebhookEvent[] = JSON.parse(body).events;
 
