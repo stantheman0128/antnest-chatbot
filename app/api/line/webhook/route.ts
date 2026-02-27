@@ -133,10 +133,14 @@ async function handleFollowEvent(
  */
 async function forwardToCyberbiz(body: string, signature: string) {
   const cyberbizUrl = process.env.CYBERBIZ_WEBHOOK_URL;
-  if (!cyberbizUrl) return;
+  if (!cyberbizUrl) {
+    console.warn("CYBERBIZ_WEBHOOK_URL not set, skipping forward");
+    return;
+  }
 
   try {
-    await fetch(cyberbizUrl, {
+    console.log("Forwarding to CYBERBIZ:", cyberbizUrl);
+    const res = await fetch(cyberbizUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -144,8 +148,8 @@ async function forwardToCyberbiz(body: string, signature: string) {
       },
       body,
     });
+    console.log("CYBERBIZ forward response:", res.status, res.statusText);
   } catch (error) {
-    // Don't let CYBERBIZ errors break our chatbot
     console.error("CYBERBIZ forward error:", error);
   }
 }
