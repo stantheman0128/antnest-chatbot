@@ -15,9 +15,30 @@ import { getQuickReply } from "@/lib/quick-replies";
 export const maxDuration = 30;
 
 // Dedup: prevent processing the same event multiple times
-// (CYBERBIZ may forward the same event more than once)
 const recentEvents = new Map<string, number>();
 const DEDUP_TTL = 30_000; // 30 seconds
+
+// Human handoff: bot pauses for specific users
+const pausedUsers = new Map<string, number>();
+const PAUSE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+function isUserPaused(userId: string): boolean {
+  const pausedAt = pausedUsers.get(userId);
+  if (!pausedAt) return false;
+  if (Date.now() - pausedAt > PAUSE_DURATION) {
+    pausedUsers.delete(userId);
+    return false;
+  }
+  return true;
+}
+
+function pauseUser(userId: string) {
+  pausedUsers.set(userId, Date.now());
+}
+
+function resumeUser(userId: string) {
+  pausedUsers.delete(userId);
+}
 
 function isDuplicate(eventId: string): boolean {
   const now = Date.now();
@@ -129,6 +150,37 @@ async function handleTextMessage(
   const userMessage = event.message.text;
   const userId = event.source.userId;
   console.log("LINE message received:", userMessage);
+
+  // "呼叫闆娘" → pause bot, hand off to human
+  if (userMessage.includes("呼叫闆娘")) {
+    if (userId) pauseUser(userId);
+    const msg: TextMessage = {
+      type: "text",
+      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n想回到 AI 客服的話，輸入「呼叫客服」就可以囉！",
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    console.log("LINE: Human handoff, bot paused for user", userId);
+    return;
+  }
+
+  // "呼叫客服" → resume bot
+  if (userMessage.includes("呼叫客服")) {
+    if (userId) resumeUser(userId);
+    const msg: TextMessage = {
+      type: "text",
+      text: "小蟻回來啦！🐜\n有什麼可以幫你的嗎？",
+      quickReply: getQuickReply(false),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    console.log("LINE: Bot resumed for user", userId);
+    return;
+  }
+
+  // If bot is paused for this user, don't respond
+  if (userId && isUserPaused(userId)) {
+    console.log("LINE: Bot paused for user, skipping", userId);
+    return;
+  }
 
   if (userId) {
     showLoadingAnimation(userId);
