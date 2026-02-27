@@ -1,5 +1,10 @@
 import { QuickReply, QuickReplyItem } from "@line/bot-sdk";
 
+const CALL_OWNER: QuickReplyItem = {
+  type: "action",
+  action: { type: "message", label: "👩 呼叫闆娘", text: "呼叫闆娘" },
+};
+
 const COMMON_REPLIES: QuickReplyItem[] = [
   {
     type: "action",
@@ -17,10 +22,7 @@ const COMMON_REPLIES: QuickReplyItem[] = [
     type: "action",
     action: { type: "message", label: "💳 付款方式", text: "有哪些付款方式？" },
   },
-  {
-    type: "action",
-    action: { type: "message", label: "📍 自取/面交", text: "可以面交或自取嗎？" },
-  },
+  CALL_OWNER,
 ];
 
 const PRODUCT_FOLLOW_UP: QuickReplyItem[] = [
@@ -36,10 +38,7 @@ const PRODUCT_FOLLOW_UP: QuickReplyItem[] = [
     type: "action",
     action: { type: "message", label: "🛒 我要訂購", text: "怎麼訂購？" },
   },
-  {
-    type: "action",
-    action: { type: "message", label: "🎁 送禮推薦", text: "想送禮有什麼推薦？" },
-  },
+  CALL_OWNER,
 ];
 
 /**
