@@ -3,13 +3,11 @@ import {
   Client,
   WebhookEvent,
   TextMessage,
-  StickerMessage,
-  FlexMessage,
   Message,
 } from "@line/bot-sdk";
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
-import { buildProductCarousel, getAllProductIds } from "@/lib/flex-message";
-import { getQuickReply } from "@/lib/quick-replies";
+import { buildProductCarousel } from "@/lib/flex-message";
+import { getQuickReply, getPausedQuickReply } from "@/lib/quick-replies";
 
 // Extend Vercel function timeout (free plan: max 60s)
 export const maxDuration = 30;
@@ -115,31 +113,6 @@ async function sendMessages(
   }
 }
 
-function buildWelcomeMessages(): Message[] {
-  const sticker: StickerMessage = {
-    type: "sticker",
-    packageId: "11537",
-    stickerId: "52002734",
-  };
-
-  const welcomeText: TextMessage = {
-    type: "text",
-    text:
-      "歡迎來到螞蟻窩甜點！🐜\n\n" +
-      "我是小螞蟻，你的甜點小幫手～\n" +
-      "可以直接打字問我任何問題，\n" +
-      "或點選下方按鈕快速開始！\n\n" +
-      "先來看看我們有什麼好吃的吧 👇",
-    quickReply: getQuickReply(false),
-  };
-
-  const carousel = buildProductCarousel(getAllProductIds());
-  const messages: Message[] = [sticker, welcomeText];
-  if (carousel) messages.push(carousel);
-
-  return messages;
-}
-
 async function handleTextMessage(
   event: WebhookEvent & {
     type: "message";
@@ -156,7 +129,8 @@ async function handleTextMessage(
     if (userId) pauseUser(userId);
     const msg: TextMessage = {
       type: "text",
-      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n想回到小螞蟻的話，輸入「呼叫小螞蟻」就可以囉！",
+      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n想回到小螞蟻的話，點下方按鈕就可以囉！",
+      quickReply: getPausedQuickReply(),
     };
     await sendMessages(event.replyToken, userId, [msg]);
     console.log("LINE: Human handoff, bot paused for user", userId);
@@ -216,14 +190,6 @@ async function handleTextMessage(
   await sendMessages(event.replyToken, userId, messages);
 }
 
-async function handleFollowEvent(
-  event: WebhookEvent & { type: "follow"; source: { userId?: string } }
-) {
-  console.log("LINE: New follower!");
-  const messages = buildWelcomeMessages();
-  await sendMessages(event.replyToken, event.source.userId, messages);
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
@@ -253,11 +219,6 @@ export async function POST(req: NextRequest) {
           event.timestamp?.toString();
         if (eventId && isDuplicate(eventId)) {
           console.log("Skipping duplicate event:", eventId);
-          return;
-        }
-
-        if (event.type === "follow") {
-          await handleFollowEvent(event as any);
           return;
         }
 

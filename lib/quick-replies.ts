@@ -41,11 +41,22 @@ const PRODUCT_FOLLOW_UP: QuickReplyItem[] = [
   CALL_OWNER,
 ];
 
+const PAUSED_REPLIES: QuickReplyItem[] = [
+  {
+    type: "action",
+    action: { type: "message", label: "🐜 呼叫小螞蟻", text: "呼叫小螞蟻" },
+  },
+];
+
 /**
- * Get appropriate quick replies based on whether products were shown
+ * Get appropriate quick replies based on context
  */
 export function getQuickReply(hasProducts: boolean): QuickReply {
   return {
     items: hasProducts ? PRODUCT_FOLLOW_UP : COMMON_REPLIES,
   };
+}
+
+export function getPausedQuickReply(): QuickReply {
+  return { items: PAUSED_REPLIES };
 }
