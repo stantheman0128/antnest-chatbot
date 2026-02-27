@@ -14,6 +14,22 @@ import { getQuickReply } from "@/lib/quick-replies";
 // Extend Vercel function timeout (free plan: max 60s)
 export const maxDuration = 30;
 
+// Dedup: prevent processing the same event multiple times
+// (CYBERBIZ may forward the same event more than once)
+const recentEvents = new Map<string, number>();
+const DEDUP_TTL = 30_000; // 30 seconds
+
+function isDuplicate(eventId: string): boolean {
+  const now = Date.now();
+  // Clean old entries
+  for (const [id, ts] of recentEvents) {
+    if (now - ts > DEDUP_TTL) recentEvents.delete(id);
+  }
+  if (recentEvents.has(eventId)) return true;
+  recentEvents.set(eventId, now);
+  return false;
+}
+
 function getLineClient() {
   return new Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
@@ -66,7 +82,12 @@ async function sendMessages(
     // replyToken already used (by CYBERBIZ) or expired → fall back to push
     if (userId && error?.statusCode === 400) {
       console.log("replyToken expired, falling back to push message");
-      await pushMessages(userId, messages);
+      try {
+        await pushMessages(userId, messages);
+      } catch (pushError: any) {
+        // 429 = rate limited, just log and give up
+        console.error("Push message failed:", pushError?.statusCode || pushError);
+      }
     } else {
       throw error;
     }
@@ -173,6 +194,16 @@ export async function POST(req: NextRequest) {
 
     await Promise.all(
       events.map(async (event) => {
+        // Dedup using webhook event ID or message ID
+        const eventId =
+          (event.type === "message" ? event.message.id : undefined) ||
+          (event as any).webhookEventId ||
+          event.timestamp?.toString();
+        if (eventId && isDuplicate(eventId)) {
+          console.log("Skipping duplicate event:", eventId);
+          return;
+        }
+
         if (event.type === "follow") {
           await handleFollowEvent(event as any);
           return;
