@@ -39,13 +39,41 @@ async function showLoadingAnimation(userId: string) {
       }),
     });
   } catch (error) {
-    // Non-critical, don't fail the whole request
     console.error("Loading animation error:", error);
   }
 }
 
+/**
+ * Send messages using push API (doesn't need replyToken).
+ * Used when we receive events via CYBERBIZ forwarding, where
+ * CYBERBIZ may have already consumed the replyToken.
+ */
+async function pushMessages(userId: string, messages: Message[]) {
+  await getLineClient().pushMessage(userId, messages);
+}
+
+/**
+ * Try reply first (free), fall back to push (uses quota) if token is expired.
+ */
+async function sendMessages(
+  replyToken: string,
+  userId: string | undefined,
+  messages: Message[]
+) {
+  try {
+    await getLineClient().replyMessage(replyToken, messages);
+  } catch (error: any) {
+    // replyToken already used (by CYBERBIZ) or expired → fall back to push
+    if (userId && error?.statusCode === 400) {
+      console.log("replyToken expired, falling back to push message");
+      await pushMessages(userId, messages);
+    } else {
+      throw error;
+    }
+  }
+}
+
 function buildWelcomeMessages(): Message[] {
-  // Animated sticker: Brown waving (package 11537)
   const sticker: StickerMessage = {
     type: "sticker",
     packageId: "11537",
@@ -81,7 +109,6 @@ async function handleTextMessage(
   const userId = event.source.userId;
   console.log("LINE message received:", userMessage);
 
-  // Show loading animation while AI is thinking
   if (userId) {
     showLoadingAnimation(userId);
   }
@@ -89,8 +116,6 @@ async function handleTextMessage(
   const aiResponse = await generateAIResponse(userMessage, []);
   const hasProducts = aiResponse.productIds.length > 0;
 
-  // Split long responses into multiple messages
-  // LINE reply API max 5 messages, reserve slots for carousel
   const maxTextSegments = hasProducts ? 2 : 3;
   const segments = splitResponse(aiResponse.text, maxTextSegments);
 
@@ -99,7 +124,6 @@ async function handleTextMessage(
     text: seg,
   }));
 
-  // Attach quick reply to the last text message
   textMessages[textMessages.length - 1].quickReply = getQuickReply(hasProducts);
 
   const messages: Message[] = [...textMessages];
@@ -116,42 +140,15 @@ async function handleTextMessage(
       : "(text only)"
   );
 
-  await getLineClient().replyMessage(event.replyToken, messages);
+  await sendMessages(event.replyToken, userId, messages);
 }
 
 async function handleFollowEvent(
-  event: WebhookEvent & { type: "follow" }
+  event: WebhookEvent & { type: "follow"; source: { userId?: string } }
 ) {
   console.log("LINE: New follower!");
   const messages = buildWelcomeMessages();
-  await getLineClient().replyMessage(event.replyToken, messages);
-}
-
-/**
- * Forward the raw webhook request to CYBERBIZ so their integration continues working.
- * Fire-and-forget: we don't wait for their response or let their errors affect us.
- */
-async function forwardToCyberbiz(body: string, signature: string) {
-  const cyberbizUrl = process.env.CYBERBIZ_WEBHOOK_URL;
-  if (!cyberbizUrl) {
-    console.warn("CYBERBIZ_WEBHOOK_URL not set, skipping forward");
-    return;
-  }
-
-  try {
-    console.log("Forwarding to CYBERBIZ:", cyberbizUrl);
-    const res = await fetch(cyberbizUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-line-signature": signature,
-      },
-      body,
-    });
-    console.log("CYBERBIZ forward response:", res.status, res.statusText);
-  } catch (error) {
-    console.error("CYBERBIZ forward error:", error);
-  }
+  await sendMessages(event.replyToken, event.source.userId, messages);
 }
 
 export async function POST(req: NextRequest) {
@@ -159,39 +156,17 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const signature = req.headers.get("x-line-signature");
 
-    // Debug: log incoming request info to diagnose CYBERBIZ forwarding
-    const headers: Record<string, string> = {};
-    req.headers.forEach((value, key) => {
-      if (!key.startsWith("x-vercel") && key !== "cookie") {
-        headers[key] = value.length > 100 ? value.substring(0, 100) + "..." : value;
-      }
-    });
-    console.log("Webhook received:", {
-      hasSignature: !!signature,
-      headers,
-      bodyPreview: body.substring(0, 500),
-    });
-
+    // Accept requests with or without signature (CYBERBIZ forwarding may or may not include it)
     if (!signature) {
-      console.warn("No x-line-signature header — possibly from CYBERBIZ forwarding");
-      // Still try to process if it looks like a LINE event
       try {
         const parsed = JSON.parse(body);
-        if (parsed.events) {
-          console.log("Has events array, processing without signature check");
-        } else {
-          console.log("No events array, rejecting. Body keys:", Object.keys(parsed));
+        if (!parsed.events) {
+          console.log("No events array, rejecting");
           return NextResponse.json({ error: "Unknown format" }, { status: 400 });
         }
       } catch {
-        console.log("Body is not valid JSON, rejecting");
         return NextResponse.json({ error: "Invalid body" }, { status: 400 });
       }
-    }
-
-    // Forward to CYBERBIZ in parallel (fire-and-forget)
-    if (signature) {
-      forwardToCyberbiz(body, signature);
     }
 
     const events: WebhookEvent[] = JSON.parse(body).events;
