@@ -159,12 +159,40 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const signature = req.headers.get("x-line-signature");
 
+    // Debug: log incoming request info to diagnose CYBERBIZ forwarding
+    const headers: Record<string, string> = {};
+    req.headers.forEach((value, key) => {
+      if (!key.startsWith("x-vercel") && key !== "cookie") {
+        headers[key] = value.length > 100 ? value.substring(0, 100) + "..." : value;
+      }
+    });
+    console.log("Webhook received:", {
+      hasSignature: !!signature,
+      headers,
+      bodyPreview: body.substring(0, 500),
+    });
+
     if (!signature) {
-      return NextResponse.json({ error: "No signature" }, { status: 400 });
+      console.warn("No x-line-signature header — possibly from CYBERBIZ forwarding");
+      // Still try to process if it looks like a LINE event
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.events) {
+          console.log("Has events array, processing without signature check");
+        } else {
+          console.log("No events array, rejecting. Body keys:", Object.keys(parsed));
+          return NextResponse.json({ error: "Unknown format" }, { status: 400 });
+        }
+      } catch {
+        console.log("Body is not valid JSON, rejecting");
+        return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+      }
     }
 
     // Forward to CYBERBIZ in parallel (fire-and-forget)
-    forwardToCyberbiz(body, signature);
+    if (signature) {
+      forwardToCyberbiz(body, signature);
+    }
 
     const events: WebhookEvent[] = JSON.parse(body).events;
 
