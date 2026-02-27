@@ -1,30 +1,7 @@
-import fs from "fs";
-import path from "path";
 import { FlexBubble, FlexCarousel, FlexMessage } from "@line/bot-sdk";
-
-interface ProductCard {
-  name: string;
-  price: string;
-  originalPrice: string | null;
-  description: string;
-  image: string;
-  url: string;
-  badges: string[];
-}
-
-type ProductCards = Record<string, ProductCard>;
-
-let productCards: ProductCards | null = null;
-
-function loadProductCards(): ProductCards {
-  if (productCards) return productCards;
-  const filePath = path.join(process.cwd(), "data", "product-cards.json");
-  productCards = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  return productCards!;
-}
+import { getActiveProducts, ProductCard } from "./data-service";
 
 const BRAND_COLOR = "#8B5E3C";
-const BRAND_DARK = "#6B4226";
 const GRAY = "#999999";
 
 function buildBubble(product: ProductCard): FlexBubble {
@@ -94,14 +71,14 @@ function buildBubble(product: ProductCard): FlexBubble {
       contents: [
         {
           type: "image",
-          url: product.image,
+          url: product.imageUrl,
           size: "full",
           aspectRatio: "20:13",
           aspectMode: "cover",
           action: {
             type: "uri",
             label: "查看商品",
-            uri: product.url,
+            uri: product.storeUrl,
           },
         },
         // Badge overlays
@@ -153,7 +130,7 @@ function buildBubble(product: ProductCard): FlexBubble {
           action: {
             type: "uri",
             label: "立即選購 🛒",
-            uri: product.url,
+            uri: product.storeUrl,
           },
           style: "primary",
           color: BRAND_COLOR,
@@ -177,16 +154,18 @@ function buildBubble(product: ProductCard): FlexBubble {
 }
 
 /**
- * Build a Flex Message carousel from product IDs
+ * Build a Flex Message carousel from product IDs.
+ * Now reads from DB via data-service.
  */
-export function buildProductCarousel(
+export async function buildProductCarousel(
   productIds: string[]
-): FlexMessage | null {
-  const cards = loadProductCards();
-  const bubbles: FlexBubble[] = [];
+): Promise<FlexMessage | null> {
+  const allProducts = await getActiveProducts();
+  const productMap = new Map(allProducts.map((p) => [p.id, p]));
 
+  const bubbles: FlexBubble[] = [];
   for (const id of productIds) {
-    const product = cards[id];
+    const product = productMap.get(id);
     if (product) {
       bubbles.push(buildBubble(product));
     }
@@ -207,8 +186,9 @@ export function buildProductCarousel(
 }
 
 /**
- * Get all product IDs
+ * Get all active product IDs
  */
-export function getAllProductIds(): string[] {
-  return Object.keys(loadProductCards());
+export async function getAllProductIds(): Promise<string[]> {
+  const products = await getActiveProducts();
+  return products.map((p) => p.id);
 }

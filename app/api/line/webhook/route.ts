@@ -176,7 +176,7 @@ async function handleTextMessage(
   const messages: Message[] = [...textMessages];
 
   if (hasProducts) {
-    const carousel = buildProductCarousel(aiResponse.productIds);
+    const carousel = await buildProductCarousel(aiResponse.productIds);
     if (carousel) messages.push(carousel);
   }
 

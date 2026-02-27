@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getSystemPrompt } from "./knowledge-base";
+import { getActiveProducts } from "./data-service";
 
 interface MessageHistory {
   role: string;
@@ -10,16 +11,6 @@ export interface AIResponse {
   text: string;
   productIds: string[];
 }
-
-const VALID_PRODUCT_IDS = [
-  "classic-tiramisu",
-  "oreo-tiramisu",
-  "super-crispy-tiramisu",
-  "luxe-cheesecake",
-  "legall-cheesecake",
-  "canele",
-  "snowflake-cookies",
-];
 
 function getAIClient() {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
@@ -35,22 +26,36 @@ function getAIClient() {
   return new GoogleGenerativeAI(apiKey);
 }
 
-const PRODUCT_CARD_INSTRUCTION = `
+/**
+ * Build the product card instruction dynamically from active products.
+ */
+async function getProductCardInstruction(): Promise<{
+  instruction: string;
+  validIds: string[];
+}> {
+  const products = await getActiveProducts();
+  const validIds = products.map((p) => p.id);
+  const idList = validIds.join(", ");
+
+  const instruction = `
 <product_cards>
 當你的回覆中提到具體商品時，請在回覆的最後一行加上：
 SHOW_PRODUCTS: product-id-1, product-id-2
 
 可用的 product ID：
-classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-cheesecake, canele, snowflake-cookies
+${idList}
 
 規則：
 • 只在提到具體商品時才加 SHOW_PRODUCTS
 • 一般閒聊、運費、付款等問題不需要加
 • 最多顯示 5 個商品
-• 如果顧客問「有什麼甜點」或「全部品項」，顯示全部 7 個
+• 如果顧客問「有什麼甜點」或「全部品項」，顯示全部
 • SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
 </product_cards>
 `;
+
+  return { instruction, validIds };
+}
 
 /**
  * Strip markdown syntax from AI response text.
@@ -81,7 +86,7 @@ function stripMarkdown(text: string): string {
   );
 }
 
-function parseAIResponse(raw: string): AIResponse {
+function parseAIResponse(raw: string, validIds: string[]): AIResponse {
   const lines = raw.split("\n");
   const productIds: string[] = [];
   const textLines: string[] = [];
@@ -93,7 +98,7 @@ function parseAIResponse(raw: string): AIResponse {
         .replace("SHOW_PRODUCTS:", "")
         .split(",")
         .map((id) => id.trim())
-        .filter((id) => VALID_PRODUCT_IDS.includes(id));
+        .filter((id) => validIds.includes(id));
       productIds.push(...ids);
     } else {
       textLines.push(line);
@@ -157,13 +162,18 @@ export function splitResponse(text: string, maxSegments = 3): string[] {
 async function callGemini(
   message: string,
   history: MessageHistory[]
-): Promise<string> {
+): Promise<{ text: string; validIds: string[] }> {
   const genAI = getAIClient();
-  const systemPrompt = getSystemPrompt() + "\n" + PRODUCT_CARD_INSTRUCTION;
+  const [systemPrompt, { instruction, validIds }] = await Promise.all([
+    getSystemPrompt(),
+    getProductCardInstruction(),
+  ]);
+
+  const fullPrompt = systemPrompt + "\n" + instruction;
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash-lite",
-    systemInstruction: systemPrompt,
+    systemInstruction: fullPrompt,
   });
 
   const contents = history
@@ -186,7 +196,7 @@ async function callGemini(
     },
   });
 
-  return response.response.text() || "";
+  return { text: response.response.text() || "", validIds };
 }
 
 const FALLBACK: AIResponse = {
@@ -204,7 +214,7 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const textContent = await callGemini(message, history);
+      const { text: textContent, validIds } = await callGemini(message, history);
 
       if (!textContent) {
         return {
@@ -213,7 +223,7 @@ export async function generateAIResponse(
         };
       }
 
-      return parseAIResponse(textContent);
+      return parseAIResponse(textContent, validIds);
     } catch (error) {
       console.error(`AI generation error (attempt ${attempt + 1}):`, error);
 
