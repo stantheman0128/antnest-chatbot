@@ -126,7 +126,7 @@ function buildWelcomeMessages(): Message[] {
     type: "text",
     text:
       "歡迎來到螞蟻窩甜點！🐜\n\n" +
-      "我是小蟻，你的甜點小幫手～\n" +
+      "我是小螞蟻，你的甜點小幫手～\n" +
       "可以直接打字問我任何問題，\n" +
       "或點選下方按鈕快速開始！\n\n" +
       "先來看看我們有什麼好吃的吧 👇",
@@ -156,7 +156,7 @@ async function handleTextMessage(
     if (userId) pauseUser(userId);
     const msg: TextMessage = {
       type: "text",
-      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n想回到 AI 客服的話，輸入「呼叫客服」就可以囉！",
+      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n想回到小螞蟻的話，輸入「呼叫小螞蟻」就可以囉！",
     };
     await sendMessages(event.replyToken, userId, [msg]);
     console.log("LINE: Human handoff, bot paused for user", userId);
@@ -164,11 +164,11 @@ async function handleTextMessage(
   }
 
   // "呼叫客服" → resume bot
-  if (userMessage.includes("呼叫客服")) {
+  if (userMessage.includes("呼叫小螞蟻") || userMessage.includes("呼叫客服")) {
     if (userId) resumeUser(userId);
     const msg: TextMessage = {
       type: "text",
-      text: "小蟻回來啦！🐜\n有什麼可以幫你的嗎？",
+      text: "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
       quickReply: getQuickReply(false),
     };
     await sendMessages(event.replyToken, userId, [msg]);
