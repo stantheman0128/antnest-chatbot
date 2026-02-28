@@ -142,7 +142,7 @@ async function handleTextMessage(
     if (userId) pauseUser(userId);
     const msg: TextMessage = {
       type: "text",
-      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n想回到小螞蟻的話，點下方按鈕就可以囉！",
+      text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
       quickReply: getPausedQuickReply(),
     };
     await sendMessages(event.replyToken, userId, [msg]);
@@ -182,7 +182,7 @@ async function handleTextMessage(
   if (aiResponse.escalate) {
     const msg: TextMessage = {
       type: "text",
-      text: aiResponse.text || "這個問題小螞蟻幫你轉接闆娘～她會盡快回覆你喔！😊\n\n想回到小螞蟻的話，點下方按鈕就可以囉！",
+      text: aiResponse.text || "這個問題幫你轉接闆娘～她會盡快回覆你喔！😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
       quickReply: getPausedQuickReply(),
     };
     await sendMessages(event.replyToken, userId, [msg]);
