@@ -170,13 +170,9 @@ async function handleTextMessage(
     return;
   }
 
-  if (userId) {
-    showLoadingAnimation(userId);
-  }
-
   const aiResponse = await generateAIResponse(userMessage, []);
 
-  // AI decided this message doesn't need a response → stay silent
+  // AI decided this message doesn't need a response → stay silent (no loading bubble)
   if (aiResponse.skip) {
     console.log("LINE: AI skipped message:", userMessage);
     return;
