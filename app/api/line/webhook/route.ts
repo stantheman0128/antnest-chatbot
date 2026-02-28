@@ -163,10 +163,10 @@ async function handleTextMessage(
     return;
   }
 
-  // If bot is paused for this user, reset idle timer but don't respond
+  // If bot is hard-paused for this user (manual "呼叫闆娘"), don't respond at all
   if (userId && isUserPaused(userId)) {
     touchPausedUser(userId);
-    console.log("LINE: Bot paused for user, resetting idle timer", userId);
+    console.log("LINE: Bot hard-paused for user, skipping", userId);
     return;
   }
 
@@ -176,9 +176,14 @@ async function handleTextMessage(
 
   const aiResponse = await generateAIResponse(userMessage, []);
 
-  // AI decided this needs human handoff → escalate
-  if (aiResponse.escalate && userId) {
-    pauseUser(userId);
+  // AI decided this message doesn't need a response → stay silent
+  if (aiResponse.skip) {
+    console.log("LINE: AI skipped message:", userMessage);
+    return;
+  }
+
+  // AI decided this needs human handoff → escalate (no hard pause)
+  if (aiResponse.escalate) {
     const msg: TextMessage = {
       type: "text",
       text: aiResponse.text || "這個問題小螞蟻幫你轉接闆娘～她會盡快回覆你喔！😊\n\n想回到小螞蟻的話，點下方按鈕就可以囉！",

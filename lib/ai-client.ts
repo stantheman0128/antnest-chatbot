@@ -11,6 +11,7 @@ export interface AIResponse {
   productIds: string[];
   escalate: boolean;
   escalateReason: string;
+  skip: boolean;
 }
 
 const VALID_PRODUCT_IDS = [
@@ -53,33 +54,41 @@ classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-
 • SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
 </product_cards>
 
-<escalation>
-當判斷客人的問題需要闆娘親自處理時，在回覆的最後一行加上：
-ESCALATE: 簡短原因
+<response_control>
+你是輔助角色，闆娘才是主要回覆者。不是每則訊息都需要你回覆。
+收到訊息後，先判斷屬於以下哪種情況：
 
-需要轉接的情況：
-• 退換貨、退款相關
+【回覆】你確定能幫上忙的商品/店鋪問題：
+• 商品介紹、價格、口味、規格
+• 運費、付款方式、出貨時間
+• 保存方式、賞味期限、食用方式
+• 會員制度、優惠券
+• 訂購流程、官網連結
+• 品牌故事、聯絡資訊
+→ 正常回覆，需要時加 SHOW_PRODUCTS
+
+【轉接】需要闆娘親自處理的問題：
+• 退換貨、退款
 • 訂單問題（查單、改單、取消）
 • 客訴、不滿、情緒激動
 • 客製化需求（特殊口味、數量、包裝、企業訂購）
 • 明確表示要找真人、闆娘、客服
 • 預約自取的時間協調
 • 任何你無法確定答案的問題
+→ 給一句簡短安撫，最後一行加上 ESCALATE: 簡短原因
+→ ESCALATE 不會顯示給顧客，系統會自動處理轉接
 
-不需要轉接（你可以回答）：
-• 商品介紹、價格、口味
-• 運費、付款方式
-• 保存方式、賞味期限
-• 會員制度
-• 一般閒聊、打招呼
+【靜默】不屬於以上兩類的訊息：
+• 打招呼、閒聊（「你好」「嗨」「謝謝」）
+• 對話中的回應（「好的」「我知道了」「到了」「我快到了」）
+• 圖片、貼圖的文字描述
+• 看不出意圖的模糊訊息
+• 明顯是在跟闆娘對話而非問問題
+→ 只輸出 SKIP
+→ 不要回覆任何文字，整則回覆就只有 SKIP 這個字
 
-當使用 ESCALATE 時：
-• 給客人一句簡短的安撫話就好（例如「我幫你轉接闆娘～」）
-• 不要試圖自己解決問題
-• 不要給出可能不準確的資訊
-• ESCALATE 這行不會顯示給顧客看，系統會自動轉接闆娘
-• ESCALATE 和 SHOW_PRODUCTS 不要同時使用
-</escalation>
+重要：寧可靜默也不要搶話。如果不確定該不該回覆，選擇 SKIP。
+</response_control>
 `;
 
 /**
@@ -112,6 +121,13 @@ function stripMarkdown(text: string): string {
 }
 
 function parseAIResponse(raw: string): AIResponse {
+  const trimmedRaw = raw.trim();
+
+  // SKIP signal — AI decided not to respond
+  if (trimmedRaw === "SKIP" || trimmedRaw.startsWith("SKIP:") || trimmedRaw.startsWith("SKIP\n")) {
+    return { text: "", productIds: [], escalate: false, escalateReason: "", skip: true };
+  }
+
   const lines = raw.split("\n");
   const productIds: string[] = [];
   const textLines: string[] = [];
@@ -145,6 +161,7 @@ function parseAIResponse(raw: string): AIResponse {
     productIds,
     escalate,
     escalateReason,
+    skip: false,
   };
 }
 
@@ -231,6 +248,7 @@ const FALLBACK: AIResponse = {
   productIds: [],
   escalate: false,
   escalateReason: "",
+  skip: false,
 };
 
 /**
@@ -251,6 +269,7 @@ export async function generateAIResponse(
           productIds: [],
           escalate: false,
           escalateReason: "",
+          skip: false,
         };
       }
 
