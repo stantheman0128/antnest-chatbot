@@ -9,6 +9,8 @@ interface MessageHistory {
 export interface AIResponse {
   text: string;
   productIds: string[];
+  escalate: boolean;
+  escalateReason: string;
 }
 
 const VALID_PRODUCT_IDS = [
@@ -50,6 +52,34 @@ classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-
 • 如果顧客問「有什麼甜點」或「全部品項」，顯示全部 7 個
 • SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
 </product_cards>
+
+<escalation>
+當判斷客人的問題需要闆娘親自處理時，在回覆的最後一行加上：
+ESCALATE: 簡短原因
+
+需要轉接的情況：
+• 退換貨、退款相關
+• 訂單問題（查單、改單、取消）
+• 客訴、不滿、情緒激動
+• 客製化需求（特殊口味、數量、包裝、企業訂購）
+• 明確表示要找真人、闆娘、客服
+• 預約自取的時間協調
+• 任何你無法確定答案的問題
+
+不需要轉接（你可以回答）：
+• 商品介紹、價格、口味
+• 運費、付款方式
+• 保存方式、賞味期限
+• 會員制度
+• 一般閒聊、打招呼
+
+當使用 ESCALATE 時：
+• 給客人一句簡短的安撫話就好（例如「我幫你轉接闆娘～」）
+• 不要試圖自己解決問題
+• 不要給出可能不準確的資訊
+• ESCALATE 這行不會顯示給顧客看，系統會自動轉接闆娘
+• ESCALATE 和 SHOW_PRODUCTS 不要同時使用
+</escalation>
 `;
 
 /**
@@ -85,6 +115,8 @@ function parseAIResponse(raw: string): AIResponse {
   const lines = raw.split("\n");
   const productIds: string[] = [];
   const textLines: string[] = [];
+  let escalate = false;
+  let escalateReason = "";
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -95,6 +127,9 @@ function parseAIResponse(raw: string): AIResponse {
         .map((id) => id.trim())
         .filter((id) => VALID_PRODUCT_IDS.includes(id));
       productIds.push(...ids);
+    } else if (trimmed.startsWith("ESCALATE:")) {
+      escalate = true;
+      escalateReason = trimmed.replace("ESCALATE:", "").trim();
     } else {
       textLines.push(line);
     }
@@ -108,6 +143,8 @@ function parseAIResponse(raw: string): AIResponse {
   return {
     text: stripMarkdown(textLines.join("\n")),
     productIds,
+    escalate,
+    escalateReason,
   };
 }
 
@@ -192,6 +229,8 @@ async function callGemini(
 const FALLBACK: AIResponse = {
   text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
   productIds: [],
+  escalate: false,
+  escalateReason: "",
 };
 
 /**
@@ -210,6 +249,8 @@ export async function generateAIResponse(
         return {
           text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
           productIds: [],
+          escalate: false,
+          escalateReason: "",
         };
       }
 

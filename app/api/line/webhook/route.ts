@@ -17,13 +17,17 @@ const recentEvents = new Map<string, number>();
 const DEDUP_TTL = 30_000; // 30 seconds
 
 // Human handoff: bot pauses for specific users
-const pausedUsers = new Map<string, number>();
-const PAUSE_DURATION = 30 * 60 * 1000; // 30 minutes
+interface PauseState {
+  pausedAt: number;
+  lastActivity: number;
+}
+const pausedUsers = new Map<string, PauseState>();
+const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min of no activity → auto-resume
 
 function isUserPaused(userId: string): boolean {
-  const pausedAt = pausedUsers.get(userId);
-  if (!pausedAt) return false;
-  if (Date.now() - pausedAt > PAUSE_DURATION) {
+  const state = pausedUsers.get(userId);
+  if (!state) return false;
+  if (Date.now() - state.lastActivity > IDLE_TIMEOUT) {
     pausedUsers.delete(userId);
     return false;
   }
@@ -31,11 +35,20 @@ function isUserPaused(userId: string): boolean {
 }
 
 function pauseUser(userId: string) {
-  pausedUsers.set(userId, Date.now());
+  const now = Date.now();
+  pausedUsers.set(userId, { pausedAt: now, lastActivity: now });
 }
 
 function resumeUser(userId: string) {
   pausedUsers.delete(userId);
+}
+
+/** Reset idle timer — called when paused user sends a message */
+function touchPausedUser(userId: string) {
+  const state = pausedUsers.get(userId);
+  if (state) {
+    state.lastActivity = Date.now();
+  }
 }
 
 function isDuplicate(eventId: string): boolean {
@@ -150,9 +163,10 @@ async function handleTextMessage(
     return;
   }
 
-  // If bot is paused for this user, don't respond
+  // If bot is paused for this user, reset idle timer but don't respond
   if (userId && isUserPaused(userId)) {
-    console.log("LINE: Bot paused for user, skipping", userId);
+    touchPausedUser(userId);
+    console.log("LINE: Bot paused for user, resetting idle timer", userId);
     return;
   }
 
@@ -161,6 +175,20 @@ async function handleTextMessage(
   }
 
   const aiResponse = await generateAIResponse(userMessage, []);
+
+  // AI decided this needs human handoff → escalate
+  if (aiResponse.escalate && userId) {
+    pauseUser(userId);
+    const msg: TextMessage = {
+      type: "text",
+      text: aiResponse.text || "這個問題小螞蟻幫你轉接闆娘～她會盡快回覆你喔！😊\n\n想回到小螞蟻的話，點下方按鈕就可以囉！",
+      quickReply: getPausedQuickReply(),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    console.log("LINE: AI escalated to human, reason:", aiResponse.escalateReason);
+    return;
+  }
+
   const hasProducts = aiResponse.productIds.length > 0;
 
   const maxTextSegments = hasProducts ? 2 : 3;
