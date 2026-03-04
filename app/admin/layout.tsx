@@ -43,6 +43,7 @@ export default function AdminLayout({
     { href: "/admin/products", label: "產品管理", icon: "🍰" },
     { href: "/admin/settings", label: "系統設定", icon: "⚙️" },
     { href: "/admin/examples", label: "對話範例", icon: "💬" },
+    { href: "/admin/pickup", label: "取貨預約", icon: "📅" },
   ];
 
   return (

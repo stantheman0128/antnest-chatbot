@@ -190,6 +190,40 @@ async function handleTextMessage(
     return;
   }
 
+  // AI wants to show pickup booking link
+  if (aiResponse.showPickupLink) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
+    const bookingUrl = `${baseUrl}/booking`;
+    const messages: Message[] = [];
+
+    if (aiResponse.text) {
+      const segments = splitResponse(aiResponse.text, 2);
+      segments.forEach((seg) => {
+        messages.push({ type: "text", text: seg } as TextMessage);
+      });
+    }
+
+    messages.push({
+      type: "template",
+      altText: "預約取貨時間",
+      template: {
+        type: "buttons",
+        text: "點下方按鈕選擇你方便的取貨時間：",
+        actions: [
+          {
+            type: "uri",
+            label: "📅 選擇取貨時間",
+            uri: bookingUrl,
+          },
+        ],
+      },
+    } as any);
+
+    await sendMessages(event.replyToken, userId, messages);
+    console.log("LINE: Pickup link sent to user");
+    return;
+  }
+
   const hasProducts = aiResponse.productIds.length > 0;
 
   const maxTextSegments = hasProducts ? 2 : 3;

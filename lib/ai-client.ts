@@ -13,6 +13,7 @@ export interface AIResponse {
   escalate: boolean;
   escalateReason: string;
   skip: boolean;
+  showPickupLink: boolean;
 }
 
 function getAIClient() {
@@ -71,13 +72,17 @@ ${idList}
 • 道謝、結尾語（「謝謝」「感謝」「好的謝謝」）→ 簡短回應
 → 正常回覆，需要時加 SHOW_PRODUCTS
 
+【預約取貨】顧客想預約自取、約取貨時間、約面交：
+→ 回覆一句親切說明（例如「幫你送上預約連結，請選擇方便的時段！😊」）
+→ 最後一行加 SHOW_PICKUP_LINK
+→ SHOW_PICKUP_LINK 不會顯示給顧客，系統會自動送出預約按鈕
+
 【轉接】需要闆娘親自處理的問題：
 • 退換貨、退款
 • 訂單問題（查單、改單、取消）
 • 客訴、不滿、情緒激動
 • 客製化需求（特殊口味、數量、包裝、企業訂購）
 • 明確表示要找真人、闆娘、客服
-• 預約自取、約面交、約取貨時間
 • 任何你無法確定答案的問題
 → 給一句簡短安撫，最後一行加上 ESCALATE: 簡短原因
 → ESCALATE 不會顯示給顧客，系統會自動處理轉接
@@ -131,7 +136,7 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
 
   // SKIP signal — AI decided not to respond
   if (trimmedRaw === "SKIP" || trimmedRaw.startsWith("SKIP:") || trimmedRaw.startsWith("SKIP\n")) {
-    return { text: "", productIds: [], escalate: false, escalateReason: "", skip: true };
+    return { text: "", productIds: [], escalate: false, escalateReason: "", skip: true, showPickupLink: false };
   }
 
 
@@ -140,6 +145,7 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
   const textLines: string[] = [];
   let escalate = false;
   let escalateReason = "";
+  let showPickupLink = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -153,6 +159,8 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
     } else if (trimmed.startsWith("ESCALATE:")) {
       escalate = true;
       escalateReason = trimmed.replace("ESCALATE:", "").trim();
+    } else if (trimmed === "SHOW_PICKUP_LINK" || trimmed.startsWith("SHOW_PICKUP_LINK:")) {
+      showPickupLink = true;
     } else {
       textLines.push(line);
     }
@@ -169,6 +177,7 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
     escalate,
     escalateReason,
     skip: false,
+    showPickupLink,
   };
 }
 
@@ -261,6 +270,7 @@ const FALLBACK: AIResponse = {
   escalate: false,
   escalateReason: "",
   skip: false,
+  showPickupLink: false,
 };
 
 /**
@@ -282,6 +292,7 @@ export async function generateAIResponse(
           escalate: false,
           escalateReason: "",
           skip: false,
+          showPickupLink: false,
         };
       }
 
