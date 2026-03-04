@@ -3,44 +3,87 @@ import { getAllProducts, upsertProduct } from "@/lib/data-service";
 import { verifyAdmin } from "@/lib/admin-auth";
 
 const CYBERBIZ_BASE = "https://antnest.cyberbiz.co";
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
 
-interface CyberbizProduct {
-  id: number;
-  title: string;
-  handle: string;
-  body_html: string;
-  variants: Array<{
-    price: string;
-    compare_at_price: string | null;
-  }>;
-  images: Array<{ src: string }>;
-  tags: string[];
+/** Extract product handles from sitemap.xml */
+async function getProductHandles(): Promise<string[]> {
+  const res = await fetch(`${CYBERBIZ_BASE}/sitemap.xml`, {
+    headers: { "User-Agent": UA },
+    next: { revalidate: 0 },
+  });
+  const xml = await res.text();
+  const matches = [...xml.matchAll(/\/products\/([^<\s]+)/g)];
+  return [...new Set(matches.map((m) => m[1]))];
 }
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+interface ScrapedProduct {
+  name: string;
+  price: string;
+  originalPrice: string | null;
+  description: string;
+  imageUrl: string;
+  storeUrl: string;
+  inStock: boolean;
+  titleForBadge: string;
 }
 
-function formatPrice(priceStr: string): string {
-  const num = parseInt(priceStr, 10);
-  if (isNaN(num)) return priceStr;
-  return `NT$${num}`;
-}
+/** Scrape a single product page, extract JSON-LD + large image */
+async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
+  try {
+    const res = await fetch(`${CYBERBIZ_BASE}/products/${handle}`, {
+      headers: { "User-Agent": UA },
+      next: { revalidate: 0 },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
 
-function inferBadges(product: CyberbizProduct, existingBadges: string[]): string[] {
-  // Keep existing badges if we have them — they were curated
-  if (existingBadges.length > 0) return existingBadges;
+    // Extract JSON-LD
+    const ldMatch = html.match(
+      /<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/
+    );
+    if (!ldMatch) return null;
 
-  const badges: string[] = [];
-  const titleAndTags = (product.title + " " + product.tags.join(" ")).toLowerCase();
+    let ld: any;
+    try {
+      ld = JSON.parse(ldMatch[1]);
+    } catch {
+      return null;
+    }
 
-  if (titleAndTags.includes("酒精") && !titleAndTags.includes("無酒精")) {
-    badges.push("🍷 含酒精");
-  } else {
-    badges.push("✅ 無酒精");
+    if (ld["@type"] !== "Product") return null;
+
+    // Extract cdn-next large image (2048x2048) from page HTML
+    const imgMatch = html.match(
+      /https:\/\/cdn-next\.cybassets\.com\/media\/[^"'\s]+2048x2048[^"'\s]*/
+    );
+    const imageUrl = imgMatch
+      ? imgMatch[0]
+      : (ld.image || "");
+
+    const price = ld.offers?.price
+      ? `NT$${Math.round(parseFloat(ld.offers.price))}`
+      : "";
+
+    return {
+      name: ld.name || handle,
+      price,
+      originalPrice: null, // JSON-LD doesn't expose compare-at price
+      description: (ld.description || "").slice(0, 120),
+      imageUrl,
+      storeUrl: ld.offers?.url || `${CYBERBIZ_BASE}/products/${handle}`,
+      inStock: ld.offers?.availability?.includes("InStock") ?? true,
+      titleForBadge: ld.name || "",
+    };
+  } catch {
+    return null;
   }
+}
 
-  return badges;
+function inferBadges(titleForBadge: string, existingBadges: string[]): string[] {
+  if (existingBadges.length > 0) return existingBadges;
+  const t = titleForBadge.toLowerCase();
+  if (t.includes("酒精") && !t.includes("無酒精")) return ["🍷 含酒精"];
+  return ["✅ 無酒精"];
 }
 
 export async function POST(req: NextRequest) {
@@ -48,72 +91,48 @@ export async function POST(req: NextRequest) {
   if (authError) return authError;
 
   try {
-    // 1. Fetch all products from CYBERBIZ
-    const collectionRes = await fetch(
-      `${CYBERBIZ_BASE}/collections/all.json?limit=250`,
-      { headers: { "User-Agent": "Mozilla/5.0" }, next: { revalidate: 0 } }
-    );
-
-    if (!collectionRes.ok) {
-      return NextResponse.json(
-        { error: `CYBERBIZ API error: ${collectionRes.status}` },
-        { status: 502 }
-      );
+    const handles = await getProductHandles();
+    if (handles.length === 0) {
+      return NextResponse.json({ error: "No products found in sitemap" }, { status: 502 });
     }
 
-    const collectionData = await collectionRes.json();
-    const cyberbizProducts: CyberbizProduct[] = collectionData.products || [];
-    const cyberbizHandles = new Set(cyberbizProducts.map((p) => p.handle));
-
-    // 2. Get existing DB products for comparison
     const existingProducts = await getAllProducts();
     const existingMap = new Map(existingProducts.map((p) => [p.id, p]));
+    const cyberbizHandles = new Set(handles);
 
     let added = 0;
     let updated = 0;
     let unchanged = 0;
     let deactivated = 0;
 
-    // 3. Upsert products found on CYBERBIZ
-    for (const cp of cyberbizProducts) {
-      const variant = cp.variants?.[0];
-      if (!variant) continue;
+    for (const handle of handles) {
+      const scraped = await scrapeProduct(handle);
+      if (!scraped || !scraped.price) continue;
 
-      const price = formatPrice(variant.price);
-      const originalPrice = variant.compare_at_price
-        ? formatPrice(variant.compare_at_price)
-        : null;
-      const imageUrl = cp.images?.[0]?.src || "";
-      const description = stripHtml(cp.body_html).slice(0, 120) || cp.title;
-      const storeUrl = `${CYBERBIZ_BASE}/products/${cp.handle}`;
-
-      const existing = existingMap.get(cp.handle);
-      const badges = inferBadges(cp, existing?.badges || []);
+      const existing = existingMap.get(handle);
+      const badges = inferBadges(scraped.titleForBadge, existing?.badges || []);
 
       const isNew = !existing;
-      const priceChanged = existing && existing.price !== price;
-      const imageChanged = existing && existing.imageUrl !== imageUrl;
+      const changed =
+        !existing ||
+        existing.price !== scraped.price ||
+        existing.imageUrl !== scraped.imageUrl ||
+        !existing.isActive;
 
-      if (!isNew && !priceChanged && !imageChanged) {
-        // Still mark as active if it was deactivated
-        if (existing && !existing.isActive) {
-          await upsertProduct({ ...existing, isActive: true });
-          updated++;
-        } else {
-          unchanged++;
-        }
+      if (!changed) {
+        unchanged++;
         continue;
       }
 
       await upsertProduct({
-        id: cp.handle,
-        name: cp.title,
-        price,
-        originalPrice,
-        description,
+        id: handle,
+        name: scraped.name,
+        price: scraped.price,
+        originalPrice: existing?.originalPrice ?? scraped.originalPrice,
+        description: scraped.description || existing?.description || scraped.name,
         detailedDescription: existing?.detailedDescription || null,
-        imageUrl,
-        storeUrl,
+        imageUrl: scraped.imageUrl || existing?.imageUrl || "",
+        storeUrl: scraped.storeUrl,
         badges,
         isActive: true,
         sortOrder: existing?.sortOrder ?? existingProducts.length + added,
@@ -125,7 +144,7 @@ export async function POST(req: NextRequest) {
       else updated++;
     }
 
-    // 4. Deactivate DB products no longer on CYBERBIZ
+    // Deactivate DB products no longer on CYBERBIZ
     for (const existing of existingProducts) {
       if (!cyberbizHandles.has(existing.id) && existing.isActive) {
         await upsertProduct({ ...existing, isActive: false });
