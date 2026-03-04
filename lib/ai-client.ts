@@ -14,14 +14,14 @@ export interface AIResponse {
   skip: boolean;
 }
 
+// Only include products with live CYBERBIZ pages (no 404s)
+// Removed: classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu (現已下架)
 const VALID_PRODUCT_IDS = [
-  "classic-tiramisu",
-  "oreo-tiramisu",
-  "super-crispy-tiramisu",
   "luxe-cheesecake",
   "legall-cheesecake",
   "canele",
   "snowflake-cookies",
+  "cheesecake-duo",
 ];
 
 function getAIClient() {
@@ -44,7 +44,7 @@ const PRODUCT_CARD_INSTRUCTION = `
 SHOW_PRODUCTS: product-id-1, product-id-2
 
 可用的 product ID：
-classic-tiramisu, oreo-tiramisu, super-crispy-tiramisu, luxe-cheesecake, legall-cheesecake, canele, snowflake-cookies
+luxe-cheesecake, legall-cheesecake, canele, snowflake-cookies, cheesecake-duo
 
 規則：
 • 只在提到具體商品時才加 SHOW_PRODUCTS

@@ -37,7 +37,7 @@
   },
   "legall-cheesecake": {
     "name": "法國 Le Gall 重乳酪",
-    "price": "NT$99",
+    "price": "NT$99 起",
     "originalPrice": null,
     "description": "螞蟻窩的起點！法國百年品牌乳酪，三層結構，濃郁不膩",
     "image": "https://antnest-chatbot.vercel.app/images/plain-cheesecake-full.jpeg",
@@ -61,5 +61,14 @@
     "image": "https://antnest-chatbot.vercel.app/images/snowflake-cookies-cubes.jpeg",
     "url": "https://antnest.cyberbiz.co/products/snowflake-cookies",
     "badges": ["✅ 無酒精", "🔥 回購王"]
+  },
+  "cheesecake-duo": {
+    "name": "豪華乳酪雙重奏",
+    "price": "NT$539",
+    "originalPrice": "NT$600",
+    "description": "慶祝粉絲破 20,000 限時組合！四吋重乳酪 + 四吋北海道巴斯克，一次帶走兩款經典",
+    "image": "https://cdn1.cybassets.com/media/W1siZiIsIjM0ODQ3L2F0dGFjaGVkX3Bob3Rvcy8xNzY1MzU3NTQ1XzUxNzU5ODg3NV82MDEzMzUwMDYzNDkyNjdfODAxMDc4Mjk0NzYxNjQzNjY4OV9uICgyKSAoMSkucG5nLnBuZyJdXQ.png?sha=b41a3dd58648e952",
+    "url": "https://antnest.cyberbiz.co/products/20000",
+    "badges": ["🎉 限時優惠", "✅ 無酒精"]
   }
 }
