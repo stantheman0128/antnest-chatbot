@@ -10,6 +10,9 @@ interface MessageHistory {
 export interface AIResponse {
   text: string;
   productIds: string[];
+  escalate: boolean;
+  escalateReason: string;
+  skip: boolean;
 }
 
 function getAIClient() {
@@ -52,6 +55,43 @@ ${idList}
 • 如果顧客問「有什麼甜點」或「全部品項」，顯示全部
 • SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
 </product_cards>
+
+<response_control>
+你是輔助角色，闆娘才是主要回覆者。不是每則訊息都需要你回覆。
+收到訊息後，先判斷屬於以下哪種情況：
+
+【回覆】你確定能幫上忙的問題：
+• 商品介紹、價格、口味、規格
+• 運費、付款方式、出貨時間
+• 保存方式、賞味期限、食用方式
+• 會員制度、優惠券
+• 訂購流程、官網連結
+• 品牌故事、聯絡資訊
+• 打招呼、問好（「你好」「嗨」「請問」）→ 親切回應
+• 道謝、結尾語（「謝謝」「感謝」「好的謝謝」）→ 簡短回應
+→ 正常回覆，需要時加 SHOW_PRODUCTS
+
+【轉接】需要闆娘親自處理的問題：
+• 退換貨、退款
+• 訂單問題（查單、改單、取消）
+• 客訴、不滿、情緒激動
+• 客製化需求（特殊口味、數量、包裝、企業訂購）
+• 明確表示要找真人、闆娘、客服
+• 預約自取、約面交、約取貨時間
+• 任何你無法確定答案的問題
+→ 給一句簡短安撫，最後一行加上 ESCALATE: 簡短原因
+→ ESCALATE 不會顯示給顧客，系統會自動處理轉接
+
+【靜默】不屬於以上兩類的訊息：
+• 對話中的回應（「好的」「我知道了」「到了」「我快到了」）
+• 圖片、貼圖的文字描述
+• 看不出意圖的模糊訊息
+• 明顯是在跟闆娘對話而非問問題
+→ 只輸出 SKIP
+→ 不要回覆任何文字，整則回覆就只有 SKIP 這個字
+
+重要：寧可靜默也不要搶話。如果不確定該不該回覆，選擇 SKIP。
+</response_control>
 `;
 
   return { instruction, validIds };
@@ -87,9 +127,19 @@ function stripMarkdown(text: string): string {
 }
 
 function parseAIResponse(raw: string, validIds: string[]): AIResponse {
+  const trimmedRaw = raw.trim();
+
+  // SKIP signal — AI decided not to respond
+  if (trimmedRaw === "SKIP" || trimmedRaw.startsWith("SKIP:") || trimmedRaw.startsWith("SKIP\n")) {
+    return { text: "", productIds: [], escalate: false, escalateReason: "", skip: true };
+  }
+
+
   const lines = raw.split("\n");
   const productIds: string[] = [];
   const textLines: string[] = [];
+  let escalate = false;
+  let escalateReason = "";
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -100,6 +150,9 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
         .map((id) => id.trim())
         .filter((id) => validIds.includes(id));
       productIds.push(...ids);
+    } else if (trimmed.startsWith("ESCALATE:")) {
+      escalate = true;
+      escalateReason = trimmed.replace("ESCALATE:", "").trim();
     } else {
       textLines.push(line);
     }
@@ -113,6 +166,9 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
   return {
     text: stripMarkdown(textLines.join("\n")),
     productIds,
+    escalate,
+    escalateReason,
+    skip: false,
   };
 }
 
@@ -202,6 +258,9 @@ async function callGemini(
 const FALLBACK: AIResponse = {
   text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
   productIds: [],
+  escalate: false,
+  escalateReason: "",
+  skip: false,
 };
 
 /**
@@ -220,6 +279,9 @@ export async function generateAIResponse(
         return {
           text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
           productIds: [],
+          escalate: false,
+          escalateReason: "",
+          skip: false,
         };
       }
 
