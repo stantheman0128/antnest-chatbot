@@ -15,6 +15,8 @@ interface Product {
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -34,6 +36,29 @@ export default function ProductsPage() {
       // ignore
     }
     setLoading(false);
+  }
+
+  async function syncFromCyberbiz() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/admin/scrape", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSyncResult(
+          `同步完成！新增 ${data.added} 個・更新 ${data.updated} 個・下架 ${data.deactivated} 個`
+        );
+        await fetchProducts();
+      } else {
+        setSyncResult("同步失敗，請稍後再試");
+      }
+    } catch {
+      setSyncResult("同步失敗，請稍後再試");
+    }
+    setSyncing(false);
   }
 
   async function toggleActive(product: Product) {
@@ -62,13 +87,28 @@ export default function ProductsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-amber-900">產品管理</h2>
-        <Link
-          href="/admin/products/new"
-          className="bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-900"
-        >
-          + 新增
-        </Link>
+        <div className="flex gap-2">
+          <button
+            onClick={syncFromCyberbiz}
+            disabled={syncing}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {syncing ? "同步中..." : "🔄 同步官網"}
+          </button>
+          <Link
+            href="/admin/products/new"
+            className="bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-900"
+          >
+            + 新增
+          </Link>
+        </div>
       </div>
+
+      {syncResult && (
+        <div className="bg-blue-50 text-blue-800 px-4 py-3 rounded-xl text-sm">
+          {syncResult}
+        </div>
+      )}
 
       <div className="space-y-3">
         {products.map((product) => (

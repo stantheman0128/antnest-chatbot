@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { getActiveProducts, getConfigMap, ProductCard } from "./data-service";
+import { getActiveProducts, getConfigMap, getActiveExamples, ProductCard, ConversationExample } from "./data-service";
 
 /**
  * Build the system prompt dynamically from Supabase data.
@@ -8,14 +8,15 @@ import { getActiveProducts, getConfigMap, ProductCard } from "./data-service";
  */
 export async function getSystemPrompt(): Promise<string> {
   try {
-    const [configMap, products] = await Promise.all([
+    const [configMap, products, examples] = await Promise.all([
       getConfigMap(),
       getActiveProducts(),
+      getActiveExamples(),
     ]);
 
     // If we have DB config, assemble dynamically
     if (configMap.size > 0) {
-      return assemblePrompt(configMap, products);
+      return assemblePrompt(configMap, products, examples);
     }
   } catch (e) {
     console.error("Failed to build dynamic system prompt:", e);
@@ -27,7 +28,8 @@ export async function getSystemPrompt(): Promise<string> {
 
 function assemblePrompt(
   config: Map<string, string>,
-  products: ProductCard[]
+  products: ProductCard[],
+  examples: ConversationExample[] = []
 ): string {
   const get = (key: string) => config.get(key) || "";
 
@@ -63,9 +65,21 @@ function assemblePrompt(
     wrap("ordering_process", get("ordering_process")),
     "</knowledge_base>",
     wrap("reminders", get("reminders")),
+    buildExamplesSection(examples),
   ];
 
   return sections.filter(Boolean).join("\n\n");
+}
+
+function buildExamplesSection(examples: ConversationExample[]): string {
+  if (examples.length === 0) return "";
+  const body = examples
+    .map(
+      (e, i) =>
+        `[範例${i + 1}]\n顧客說：「${e.customerMessage}」\n你應該回：「${e.correctResponse}」${e.note ? `\n（備註：${e.note}）` : ""}`
+    )
+    .join("\n\n");
+  return `<correction_examples>\n以下是真實對話的修正範例，請嚴格遵守：\n\n${body}\n</correction_examples>`;
 }
 
 function wrap(tag: string, content: string): string {

@@ -42,6 +42,7 @@ export default function AdminLayout({
     { href: "/admin", label: "首頁", icon: "🏠" },
     { href: "/admin/products", label: "產品管理", icon: "🍰" },
     { href: "/admin/settings", label: "系統設定", icon: "⚙️" },
+    { href: "/admin/examples", label: "對話範例", icon: "💬" },
   ];
 
   return (
