@@ -42,6 +42,10 @@ const PAUSED_REPLIES: QuickReplyItem[] = [
     type: "action",
     action: { type: "message", label: "🐜 呼叫小螞蟻", text: "呼叫小螞蟻" },
   },
+  {
+    type: "action",
+    action: { type: "message", label: "📅 我要預約取貨", text: "我要預約取貨" },
+  },
 ];
 
 /**
