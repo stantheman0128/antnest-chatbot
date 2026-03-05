@@ -354,73 +354,159 @@ function mapDbExample(row: any): ConversationExample {
 
 export interface PickupAvailability {
   id: string;
-  weekday: number;        // 0=Sun, 1=Mon, ..., 6=Sat
-  startTime: string;      // "14:00"
-  endTime: string;        // "17:00"
-  slotDurationMinutes: number;
-  maxPerSlot: number;
+  availableDate: string;    // "2026-03-10"
+  startTime: string;        // "14:00"
+  endTime: string;          // "18:00"
+  maxBookings: number;
   isActive: boolean;
+  currentBookings: number;  // counted from confirmed reservations
   createdAt: string;
-}
-
-export interface PickupSlot {
-  id: string;
-  availabilityId: string;
-  slotDate: string;       // "2026-03-10"
-  startTime: string;
-  endTime: string;
-  maxCapacity: number;
-  currentBookings: number;
-  isAvailable: boolean;
 }
 
 export interface Reservation {
   id: string;
-  slotId: string;
+  availabilityId: string;
   lineUserId: string | null;
   displayName: string;
+  pickupTime: string;       // "15:30" — exact customer-requested time
   orderNumber: string | null;
   note: string | null;
   status: "confirmed" | "cancelled" | "completed";
   createdAt: string;
   // joined
-  slotDate?: string;
-  slotStartTime?: string;
-  slotEndTime?: string;
+  availableDate?: string;
 }
 
-export async function getAvailabilityRules(): Promise<PickupAvailability[]> {
+/** Returns future active dates that still have capacity (for LINE booking). */
+export async function getAvailableDates(): Promise<PickupAvailability[]> {
   const sb = getSupabase();
   if (!sb) return [];
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: avails, error } = await sb
+    .from("pickup_availability")
+    .select("*")
+    .eq("is_active", true)
+    .gte("available_date", today)
+    .order("available_date", { ascending: true });
+  if (error) { console.error("available dates fetch error:", error); return []; }
+  if (!avails || avails.length === 0) return [];
+
+  // Count confirmed bookings per availability in one query
+  const ids = avails.map((a: any) => a.id);
+  const { data: reservs } = await sb
+    .from("reservations")
+    .select("availability_id")
+    .in("availability_id", ids)
+    .eq("status", "confirmed");
+
+  const counts = new Map<string, number>();
+  for (const r of (reservs || [])) {
+    counts.set(r.availability_id, (counts.get(r.availability_id) || 0) + 1);
+  }
+
+  return avails
+    .map((row: any): PickupAvailability => ({
+      id: row.id,
+      availableDate: row.available_date,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      maxBookings: row.max_bookings,
+      isActive: row.is_active,
+      currentBookings: counts.get(row.id) || 0,
+      createdAt: row.created_at,
+    }))
+    .filter((a) => a.currentBookings < a.maxBookings);
+}
+
+/** Returns all future availabilities (for admin panel). */
+export async function getAllAvailabilities(): Promise<PickupAvailability[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const today = new Date().toISOString().split("T")[0];
+
+  const { data: avails, error } = await sb
+    .from("pickup_availability")
+    .select("*")
+    .gte("available_date", today)
+    .order("available_date", { ascending: true });
+  if (error) { console.error("availabilities fetch error:", error); return []; }
+  if (!avails || avails.length === 0) return [];
+
+  const ids = avails.map((a: any) => a.id);
+  const { data: reservs } = await sb
+    .from("reservations")
+    .select("availability_id")
+    .in("availability_id", ids)
+    .eq("status", "confirmed");
+
+  const counts = new Map<string, number>();
+  for (const r of (reservs || [])) {
+    counts.set(r.availability_id, (counts.get(r.availability_id) || 0) + 1);
+  }
+
+  return avails.map((row: any): PickupAvailability => ({
+    id: row.id,
+    availableDate: row.available_date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+    maxBookings: row.max_bookings,
+    isActive: row.is_active,
+    currentBookings: counts.get(row.id) || 0,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function getAvailabilityById(id: string): Promise<PickupAvailability | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
   const { data, error } = await sb
     .from("pickup_availability")
     .select("*")
-    .order("weekday", { ascending: true });
-  if (error) { console.error("availability fetch error:", error); return []; }
-  return (data || []).map(mapDbAvailability);
+    .eq("id", id)
+    .single();
+  if (error) return null;
+
+  const { count } = await sb
+    .from("reservations")
+    .select("*", { count: "exact", head: true })
+    .eq("availability_id", id)
+    .eq("status", "confirmed");
+
+  return {
+    id: data.id,
+    availableDate: data.available_date,
+    startTime: data.start_time,
+    endTime: data.end_time,
+    maxBookings: data.max_bookings,
+    isActive: data.is_active,
+    currentBookings: count || 0,
+    createdAt: data.created_at,
+  };
 }
 
-export async function upsertAvailability(
-  rule: Partial<PickupAvailability> & { weekday: number; startTime: string; endTime: string }
-): Promise<PickupAvailability | null> {
+/** Bulk-create or update availability for the given dates (admin calendar multi-select). */
+export async function bulkCreateAvailabilities(
+  dates: string[],
+  startTime: string,
+  endTime: string,
+  maxBookings: number
+): Promise<number> {
   const sb = getSupabase();
-  if (!sb) return null;
-  const row: any = {
-    weekday: rule.weekday,
-    start_time: rule.startTime,
-    end_time: rule.endTime,
-    slot_duration_minutes: rule.slotDurationMinutes ?? 60,
-    max_per_slot: rule.maxPerSlot ?? 3,
-    is_active: rule.isActive ?? true,
-  };
-  if (rule.id) row.id = rule.id;
+  if (!sb) return 0;
+  const rows = dates.map((d) => ({
+    available_date: d,
+    start_time: startTime,
+    end_time: endTime,
+    max_bookings: maxBookings,
+    is_active: true,
+  }));
   const { data, error } = await sb
     .from("pickup_availability")
-    .upsert(row, { onConflict: "id" })
-    .select()
-    .single();
-  if (error) { console.error("availability upsert error:", error); return null; }
-  return mapDbAvailability(data);
+    .upsert(rows, { onConflict: "available_date" })
+    .select();
+  if (error) { console.error("bulk create error:", error); return 0; }
+  return (data || []).length;
 }
 
 export async function deleteAvailability(id: string): Promise<boolean> {
@@ -431,120 +517,28 @@ export async function deleteAvailability(id: string): Promise<boolean> {
   return true;
 }
 
-/**
- * Lazily generate pickup_slots for the next `weeksAhead` weeks based on availability rules.
- * Only creates slots that don't already exist (UNIQUE constraint on slot_date + start_time).
- */
-export async function ensureSlotsGenerated(weeksAhead = 3): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-
-  const rules = await getAvailabilityRules();
-  const activeRules = rules.filter((r) => r.isActive);
-  if (activeRules.length === 0) return;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const slotsToInsert: any[] = [];
-
-  for (let w = 0; w < weeksAhead; w++) {
-    for (let d = 0; d < 7; d++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + w * 7 + d);
-      const weekday = date.getDay();
-
-      for (const rule of activeRules) {
-        if (rule.weekday !== weekday) continue;
-
-        // Generate slots within the time window
-        const [sh, sm] = rule.startTime.split(":").map(Number);
-        const [eh, em] = rule.endTime.split(":").map(Number);
-        let cursor = sh * 60 + sm;
-        const endMinutes = eh * 60 + em;
-
-        while (cursor + rule.slotDurationMinutes <= endMinutes) {
-          const startH = String(Math.floor(cursor / 60)).padStart(2, "0");
-          const startM = String(cursor % 60).padStart(2, "0");
-          const endCursor = cursor + rule.slotDurationMinutes;
-          const endH = String(Math.floor(endCursor / 60)).padStart(2, "0");
-          const endM = String(endCursor % 60).padStart(2, "0");
-
-          slotsToInsert.push({
-            availability_id: rule.id,
-            slot_date: date.toISOString().split("T")[0],
-            start_time: `${startH}:${startM}`,
-            end_time: `${endH}:${endM}`,
-            max_capacity: rule.maxPerSlot,
-            current_bookings: 0,
-            is_available: true,
-          });
-          cursor += rule.slotDurationMinutes;
-        }
-      }
-    }
-  }
-
-  if (slotsToInsert.length === 0) return;
-  // ignore conflicts (already exists)
-  await sb.from("pickup_slots").upsert(slotsToInsert, {
-    onConflict: "slot_date,start_time",
-    ignoreDuplicates: true,
-  });
-}
-
-export async function getAvailableSlots(): Promise<PickupSlot[]> {
-  const sb = getSupabase();
-  if (!sb) return [];
-
-  await ensureSlotsGenerated(3);
-
-  const today = new Date().toISOString().split("T")[0];
-  const { data, error } = await sb
-    .from("pickup_slots")
-    .select("*")
-    .gte("slot_date", today)
-    .eq("is_available", true)
-    .order("slot_date", { ascending: true })
-    .order("start_time", { ascending: true });
-
-  if (error) { console.error("slots fetch error:", error); return []; }
-  return (data || [])
-    .map(mapDbSlot)
-    .filter((s) => s.currentBookings < s.maxCapacity);
-}
-
-export async function getSlotById(id: string): Promise<PickupSlot | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const { data, error } = await sb
-    .from("pickup_slots")
-    .select("*")
-    .eq("id", id)
-    .single();
-  if (error) return null;
-  return mapDbSlot(data);
-}
-
 export async function createReservation(input: {
-  slotId: string;
+  availabilityId: string;
   lineUserId?: string;
   displayName: string;
+  pickupTime: string;
   orderNumber?: string;
   note?: string;
 }): Promise<Reservation | null> {
   const sb = getSupabase();
   if (!sb) return null;
 
-  // Check slot still has capacity
-  const slot = await getSlotById(input.slotId);
-  if (!slot || slot.currentBookings >= slot.maxCapacity) return null;
+  // Check capacity
+  const avail = await getAvailabilityById(input.availabilityId);
+  if (!avail || avail.currentBookings >= avail.maxBookings) return null;
 
   const { data, error } = await sb
     .from("reservations")
     .insert({
-      slot_id: input.slotId,
+      availability_id: input.availabilityId,
       line_user_id: input.lineUserId || null,
       display_name: input.displayName,
+      pickup_time: input.pickupTime,
       order_number: input.orderNumber || null,
       note: input.note || null,
       status: "confirmed",
@@ -553,13 +547,6 @@ export async function createReservation(input: {
     .single();
 
   if (error) { console.error("reservation insert error:", error); return null; }
-
-  // Increment current_bookings
-  await sb
-    .from("pickup_slots")
-    .update({ current_bookings: slot.currentBookings + 1 })
-    .eq("id", input.slotId);
-
   return mapDbReservation(data);
 }
 
@@ -569,17 +556,17 @@ export async function getAllReservations(dateFilter?: string): Promise<Reservati
 
   let query = sb
     .from("reservations")
-    .select("*, pickup_slots(slot_date, start_time, end_time)")
+    .select("*, pickup_availability(available_date)")
     .order("created_at", { ascending: false });
 
   if (dateFilter) {
-    const { data: slots } = await sb
-      .from("pickup_slots")
+    const { data: avail } = await sb
+      .from("pickup_availability")
       .select("id")
-      .eq("slot_date", dateFilter);
-    const slotIds = (slots || []).map((s: any) => s.id);
-    if (slotIds.length === 0) return [];
-    query = query.in("slot_id", slotIds);
+      .eq("available_date", dateFilter)
+      .single();
+    if (!avail) return [];
+    query = query.eq("availability_id", avail.id);
   }
 
   const { data, error } = await query;
@@ -587,9 +574,7 @@ export async function getAllReservations(dateFilter?: string): Promise<Reservati
 
   return (data || []).map((r: any) => ({
     ...mapDbReservation(r),
-    slotDate: r.pickup_slots?.slot_date,
-    slotStartTime: r.pickup_slots?.start_time,
-    slotEndTime: r.pickup_slots?.end_time,
+    availableDate: r.pickup_availability?.available_date,
   }));
 }
 
@@ -599,46 +584,18 @@ export async function updateReservationStatus(
 ): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
-  const { error } = await sb
-    .from("reservations")
-    .update({ status })
-    .eq("id", id);
+  const { error } = await sb.from("reservations").update({ status }).eq("id", id);
   if (error) { console.error("reservation update error:", error); return false; }
   return true;
-}
-
-function mapDbAvailability(row: any): PickupAvailability {
-  return {
-    id: row.id,
-    weekday: row.weekday,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    slotDurationMinutes: row.slot_duration_minutes,
-    maxPerSlot: row.max_per_slot,
-    isActive: row.is_active,
-    createdAt: row.created_at,
-  };
-}
-
-function mapDbSlot(row: any): PickupSlot {
-  return {
-    id: row.id,
-    availabilityId: row.availability_id,
-    slotDate: row.slot_date,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    maxCapacity: row.max_capacity,
-    currentBookings: row.current_bookings,
-    isAvailable: row.is_available,
-  };
 }
 
 function mapDbReservation(row: any): Reservation {
   return {
     id: row.id,
-    slotId: row.slot_id,
+    availabilityId: row.availability_id,
     lineUserId: row.line_user_id || null,
     displayName: row.display_name,
+    pickupTime: row.pickup_time,
     orderNumber: row.order_number || null,
     note: row.note || null,
     status: row.status,

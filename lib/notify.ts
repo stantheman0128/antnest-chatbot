@@ -16,15 +16,15 @@ export async function notifyOwnerNewReservation(
   const ownerId = process.env.OWNER_LINE_USER_ID;
   if (!ownerId) return;
 
-  const date = reservation.slotDate
-    ? new Date(reservation.slotDate + "T00:00:00")
+  const date = reservation.availableDate
+    ? new Date(reservation.availableDate + "T00:00:00")
     : null;
   const weekday = date ? WEEKDAY_ZH[date.getDay()] : "";
   const dateStr = date
     ? `${date.getMonth() + 1}/${date.getDate()}（週${weekday}）`
     : "";
-  const timeStr = reservation.slotStartTime
-    ? `${reservation.slotStartTime}–${reservation.slotEndTime}`
+  const timeStr = reservation.pickupTime
+    ? reservation.pickupTime.slice(0, 5)
     : "";
 
   const lines = [
@@ -33,7 +33,8 @@ export async function notifyOwnerNewReservation(
     `👤 ${reservation.displayName}`,
     reservation.lineUserId ? `🔑 LINE ID：${reservation.lineUserId}` : null,
     reservation.orderNumber ? `🧾 訂單：${reservation.orderNumber}` : null,
-    `📅 時間：${dateStr} ${timeStr}`,
+    `📅 日期：${dateStr}`,
+    timeStr ? `⏰ 時間：${timeStr}` : null,
     reservation.note ? `💬 備註：${reservation.note}` : null,
     "",
     "在後台管理預約：\n" + (process.env.NEXT_PUBLIC_BASE_URL || "") + "/admin/pickup",

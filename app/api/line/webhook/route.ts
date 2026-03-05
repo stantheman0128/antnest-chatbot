@@ -7,9 +7,13 @@ import {
 } from "@line/bot-sdk";
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
 import { buildProductCarousel } from "@/lib/flex-message";
+import { buildPickupDateCarousel } from "@/lib/pickup-flex";
 import { getQuickReply, getPausedQuickReply } from "@/lib/quick-replies";
-import { getAvailableSlots, getSlotById, createReservation } from "@/lib/data-service";
-import type { PickupSlot } from "@/lib/data-service";
+import {
+  getAvailableDates,
+  getAvailabilityById,
+  createReservation,
+} from "@/lib/data-service";
 import { notifyOwnerNewReservation } from "@/lib/notify";
 
 // Extend Vercel function timeout (free plan: max 60s)
@@ -96,8 +100,6 @@ async function showLoadingAnimation(userId: string) {
 
 /**
  * Send messages using push API (doesn't need replyToken).
- * Used when we receive events via CYBERBIZ forwarding, where
- * CYBERBIZ may have already consumed the replyToken.
  */
 async function pushMessages(userId: string, messages: Message[]) {
   await getLineClient().pushMessage(userId, messages);
@@ -141,20 +143,11 @@ async function getLineProfile(userId: string): Promise<{ displayName: string } |
   }
 }
 
-function formatSlotLabel(slot: PickupSlot): string {
-  const d = new Date(slot.slotDate + "T00:00:00");
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
-  const w = WEEKDAYS[d.getDay()];
-  const remaining = slot.maxCapacity - slot.currentBookings;
-  // e.g. "3/10(一)14:00 剩3" — stays within 20 char LINE label limit
-  return `${m}/${day}(${w})${slot.startTime.slice(0, 5)} 剩${remaining}`;
-}
+/** Send pickup date carousel (Flex Message with DateTimePicker buttons) */
+async function sendPickupDateCarousel(replyToken: string, userId: string | undefined) {
+  const availabilities = await getAvailableDates();
 
-async function sendPickupSlots(replyToken: string, userId: string | undefined) {
-  const slots = await getAvailableSlots();
-  if (slots.length === 0) {
+  if (availabilities.length === 0) {
     const msg: TextMessage = {
       type: "text",
       text: "目前沒有可預約的取貨時段，請稍後再試或直接聯繫闆娘 😊",
@@ -164,29 +157,32 @@ async function sendPickupSlots(replyToken: string, userId: string | undefined) {
     return;
   }
 
-  const items = slots.slice(0, 13).map((slot) => ({
-    type: "action" as const,
-    action: {
-      type: "message" as const,
-      label: formatSlotLabel(slot),
-      text: `BOOK_SLOT:${slot.id}`,
-    },
-  }));
+  const carousel = buildPickupDateCarousel(availabilities);
+  if (!carousel) return;
 
-  const msg: TextMessage = {
+  const intro: TextMessage = {
     type: "text",
-    text: "以下是可預約的取貨時段，請選擇你方便的時間 📅",
-    quickReply: { items },
+    text: "以下是可取貨的日期，請選擇並選好取貨時間 📅",
   };
-  await sendMessages(replyToken, userId, [msg]);
+
+  await sendMessages(replyToken, userId, [intro, carousel as Message]);
 }
 
-async function handleBookSlot(replyToken: string, userId: string, slotId: string) {
-  const slot = await getSlotById(slotId);
-  if (!slot || slot.currentBookings >= slot.maxCapacity) {
+/** Handle postback from DateTimePicker: PICK_TIME:{availabilityId} */
+async function handlePickupTimeSelected(
+  replyToken: string,
+  userId: string,
+  data: string,
+  pickupTime: string
+) {
+  const availabilityId = data.replace("PICK_TIME:", "").trim();
+
+  const avail = await getAvailabilityById(availabilityId);
+  if (!avail || avail.currentBookings >= avail.maxBookings) {
     const msg: TextMessage = {
       type: "text",
       text: "抱歉，這個時段剛好預約滿了！請重新選擇 😅",
+      quickReply: getQuickReply(false),
     };
     await sendMessages(replyToken, userId, [msg]);
     return;
@@ -195,14 +191,20 @@ async function handleBookSlot(replyToken: string, userId: string, slotId: string
   const profile = await getLineProfile(userId);
   const displayName = profile?.displayName || "LINE用戶";
 
-  const reservation = await createReservation({ slotId, lineUserId: userId, displayName });
+  const reservation = await createReservation({
+    availabilityId,
+    lineUserId: userId,
+    displayName,
+    pickupTime,
+  });
+
   if (!reservation) {
     const msg: TextMessage = { type: "text", text: "預約失敗，請稍後再試" };
     await sendMessages(replyToken, userId, [msg]);
     return;
   }
 
-  const d = new Date(slot.slotDate + "T00:00:00");
+  const d = new Date(avail.availableDate + "T00:00:00");
   const m = d.getMonth() + 1;
   const day = d.getDate();
   const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -210,7 +212,7 @@ async function handleBookSlot(replyToken: string, userId: string, slotId: string
 
   const confirmMsg: TextMessage = {
     type: "text",
-    text: `✅ 預約成功！\n\n📅 ${m}月${day}日（週${w}）\n⏰ ${slot.startTime.slice(0, 5)}–${slot.endTime.slice(0, 5)}\n\n有問題請聯繫闆娘 😊`,
+    text: `✅ 預約成功！\n\n📅 ${m}月${day}日（週${w}）\n⏰ ${pickupTime.slice(0, 5)}\n\n有問題請聯繫闆娘 😊`,
     quickReply: getQuickReply(false),
   };
   await sendMessages(replyToken, userId, [confirmMsg]);
@@ -218,9 +220,7 @@ async function handleBookSlot(replyToken: string, userId: string, slotId: string
 
   notifyOwnerNewReservation({
     ...reservation,
-    slotDate: slot.slotDate,
-    slotStartTime: slot.startTime,
-    slotEndTime: slot.endTime,
+    availableDate: avail.availableDate,
   }).catch(console.error);
 }
 
@@ -271,13 +271,6 @@ async function handleTextMessage(
     return;
   }
 
-  // Slot booking from QuickReply tap — bypass AI and pause state
-  if (userMessage.startsWith("BOOK_SLOT:") && userId) {
-    const slotId = userMessage.replace("BOOK_SLOT:", "").trim();
-    await handleBookSlot(event.replyToken, userId, slotId);
-    return;
-  }
-
   // Bot is opt-in — only respond if user has activated it
   if (!userId || !isUserActive(userId)) {
     console.log("LINE: Bot inactive for user, skipping:", userId);
@@ -286,29 +279,29 @@ async function handleTextMessage(
 
   const aiResponse = await generateAIResponse(userMessage, []);
 
-  // AI decided this message doesn't need a response → stay silent (no loading bubble)
+  // AI decided this message doesn't need a response → stay silent
   if (aiResponse.skip) {
     console.log("LINE: AI skipped message:", userMessage);
     return;
   }
 
-  // AI decided this needs human handoff → escalate (no hard pause)
+  // AI decided this needs human handoff → escalate
   if (aiResponse.escalate) {
     const msg: TextMessage = {
       type: "text",
       text: aiResponse.text || "這個問題幫你轉接闆娘～她會盡快回覆你喔！😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
       quickReply: getPausedQuickReply(),
     };
-    if (userId) deactivateUser(userId); // owner taking over
+    if (userId) deactivateUser(userId);
     await sendMessages(event.replyToken, userId, [msg]);
     console.log("LINE: AI escalated to human, reason:", aiResponse.escalateReason);
     return;
   }
 
-  // AI wants to show pickup slots → show as QuickReply buttons in chat
+  // AI wants to show pickup slots → send Flex Carousel with DateTimePicker
   if (aiResponse.showPickupLink) {
-    await sendPickupSlots(event.replyToken, userId);
-    console.log("LINE: Pickup slots sent to user");
+    await sendPickupDateCarousel(event.replyToken, userId);
+    console.log("LINE: Pickup date carousel sent to user");
     return;
   }
 
@@ -340,6 +333,25 @@ async function handleTextMessage(
 
   await sendMessages(event.replyToken, userId, messages);
   if (userId) touchBotActivity(userId);
+}
+
+async function handlePostback(
+  event: WebhookEvent & {
+    type: "postback";
+    postback: { data: string; params?: { time?: string } };
+    source: { userId?: string };
+  }
+) {
+  const userId = event.source.userId;
+  const data = event.postback.data;
+  const time = event.postback.params?.time; // e.g. "15:30"
+
+  if (data.startsWith("PICK_TIME:") && userId && time) {
+    await handlePickupTimeSelected(event.replyToken, userId, data, time);
+    return;
+  }
+
+  console.log("LINE: Unhandled postback data:", data);
 }
 
 export async function POST(req: NextRequest) {
@@ -376,6 +388,11 @@ export async function POST(req: NextRequest) {
 
         if (event.type === "message" && event.message.type === "text") {
           await handleTextMessage(event as any);
+          return;
+        }
+
+        if (event.type === "postback") {
+          await handlePostback(event as any);
           return;
         }
       })

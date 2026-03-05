@@ -1,16 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getAvailableSlots, ensureSlotsGenerated } from "@/lib/data-service";
-import { verifyAdmin } from "@/lib/admin-auth";
+import { NextResponse } from "next/server";
 
-export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req);
-  if (authError) return authError;
-  return NextResponse.json(await getAvailableSlots());
+// pickup_slots table no longer exists — replaced by pickup_availability (date-based).
+export async function GET() {
+  return NextResponse.json({ error: "Gone — use /api/admin/pickup/availability" }, { status: 410 });
 }
 
-export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req);
-  if (authError) return authError;
-  await ensureSlotsGenerated(4);
-  return NextResponse.json({ success: true });
+export async function POST() {
+  return NextResponse.json({ error: "Gone — use /api/admin/pickup/availability" }, { status: 410 });
 }
