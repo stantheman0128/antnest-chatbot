@@ -30,7 +30,8 @@ export async function notifyOwnerNewReservation(
   const lines = [
     "📦 新的取貨預約！",
     "",
-    `👤 姓名：${reservation.displayName}`,
+    `👤 ${reservation.displayName}`,
+    reservation.lineUserId ? `🔑 LINE ID：${reservation.lineUserId}` : null,
     reservation.orderNumber ? `🧾 訂單：${reservation.orderNumber}` : null,
     `📅 時間：${dateStr} ${timeStr}`,
     reservation.note ? `💬 備註：${reservation.note}` : null,

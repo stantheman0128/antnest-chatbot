@@ -8,6 +8,9 @@ import {
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
 import { buildProductCarousel } from "@/lib/flex-message";
 import { getQuickReply, getPausedQuickReply } from "@/lib/quick-replies";
+import { getAvailableSlots, getSlotById, createReservation } from "@/lib/data-service";
+import type { PickupSlot } from "@/lib/data-service";
+import { notifyOwnerNewReservation } from "@/lib/notify";
 
 // Extend Vercel function timeout (free plan: max 60s)
 export const maxDuration = 30;
@@ -126,6 +129,100 @@ async function sendMessages(
   }
 }
 
+async function getLineProfile(userId: string): Promise<{ displayName: string } | null> {
+  try {
+    const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+      headers: { Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+function formatSlotLabel(slot: PickupSlot): string {
+  const d = new Date(slot.slotDate + "T00:00:00");
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+  const w = WEEKDAYS[d.getDay()];
+  const remaining = slot.maxCapacity - slot.currentBookings;
+  // e.g. "3/10(一)14:00 剩3" — stays within 20 char LINE label limit
+  return `${m}/${day}(${w})${slot.startTime.slice(0, 5)} 剩${remaining}`;
+}
+
+async function sendPickupSlots(replyToken: string, userId: string | undefined) {
+  const slots = await getAvailableSlots();
+  if (slots.length === 0) {
+    const msg: TextMessage = {
+      type: "text",
+      text: "目前沒有可預約的取貨時段，請稍後再試或直接聯繫闆娘 😊",
+      quickReply: getQuickReply(false),
+    };
+    await sendMessages(replyToken, userId, [msg]);
+    return;
+  }
+
+  const items = slots.slice(0, 13).map((slot) => ({
+    type: "action" as const,
+    action: {
+      type: "message" as const,
+      label: formatSlotLabel(slot),
+      text: `BOOK_SLOT:${slot.id}`,
+    },
+  }));
+
+  const msg: TextMessage = {
+    type: "text",
+    text: "以下是可預約的取貨時段，請選擇你方便的時間 📅",
+    quickReply: { items },
+  };
+  await sendMessages(replyToken, userId, [msg]);
+}
+
+async function handleBookSlot(replyToken: string, userId: string, slotId: string) {
+  const slot = await getSlotById(slotId);
+  if (!slot || slot.currentBookings >= slot.maxCapacity) {
+    const msg: TextMessage = {
+      type: "text",
+      text: "抱歉，這個時段剛好預約滿了！請重新選擇 😅",
+    };
+    await sendMessages(replyToken, userId, [msg]);
+    return;
+  }
+
+  const profile = await getLineProfile(userId);
+  const displayName = profile?.displayName || "LINE用戶";
+
+  const reservation = await createReservation({ slotId, lineUserId: userId, displayName });
+  if (!reservation) {
+    const msg: TextMessage = { type: "text", text: "預約失敗，請稍後再試" };
+    await sendMessages(replyToken, userId, [msg]);
+    return;
+  }
+
+  const d = new Date(slot.slotDate + "T00:00:00");
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+  const w = WEEKDAYS[d.getDay()];
+
+  const confirmMsg: TextMessage = {
+    type: "text",
+    text: `✅ 預約成功！\n\n📅 ${m}月${day}日（週${w}）\n⏰ ${slot.startTime.slice(0, 5)}–${slot.endTime.slice(0, 5)}\n\n有問題請聯繫闆娘 😊`,
+    quickReply: getQuickReply(false),
+  };
+  await sendMessages(replyToken, userId, [confirmMsg]);
+
+  notifyOwnerNewReservation({
+    ...reservation,
+    slotDate: slot.slotDate,
+    slotStartTime: slot.startTime,
+    slotEndTime: slot.endTime,
+  }).catch(console.error);
+}
+
 async function handleTextMessage(
   event: WebhookEvent & {
     type: "message";
@@ -163,6 +260,23 @@ async function handleTextMessage(
     return;
   }
 
+  // "我的ID" → reply with LINE User ID (useful for owner setup)
+  if (userMessage.trim() === "我的ID" || userMessage.trim() === "我的id") {
+    const msg: TextMessage = {
+      type: "text",
+      text: `你的 LINE User ID：\n${userId || "（無法取得）"}`,
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    return;
+  }
+
+  // Slot booking from QuickReply tap — bypass AI and pause state
+  if (userMessage.startsWith("BOOK_SLOT:") && userId) {
+    const slotId = userMessage.replace("BOOK_SLOT:", "").trim();
+    await handleBookSlot(event.replyToken, userId, slotId);
+    return;
+  }
+
   // If bot is hard-paused for this user (manual "呼叫闆娘"), don't respond at all
   if (userId && isUserPaused(userId)) {
     touchPausedUser(userId);
@@ -190,37 +304,10 @@ async function handleTextMessage(
     return;
   }
 
-  // AI wants to show pickup booking link
+  // AI wants to show pickup slots → show as QuickReply buttons in chat
   if (aiResponse.showPickupLink) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "";
-    const bookingUrl = `${baseUrl}/booking`;
-    const messages: Message[] = [];
-
-    if (aiResponse.text) {
-      const segments = splitResponse(aiResponse.text, 2);
-      segments.forEach((seg) => {
-        messages.push({ type: "text", text: seg } as TextMessage);
-      });
-    }
-
-    messages.push({
-      type: "template",
-      altText: "預約取貨時間",
-      template: {
-        type: "buttons",
-        text: "點下方按鈕選擇你方便的取貨時間：",
-        actions: [
-          {
-            type: "uri",
-            label: "📅 選擇取貨時間",
-            uri: bookingUrl,
-          },
-        ],
-      },
-    } as any);
-
-    await sendMessages(event.replyToken, userId, messages);
-    console.log("LINE: Pickup link sent to user");
+    await sendPickupSlots(event.replyToken, userId);
+    console.log("LINE: Pickup slots sent to user");
     return;
   }
 
