@@ -261,6 +261,21 @@ async function handleTextMessage(
     return;
   }
 
+  // 預約取貨關鍵字 → bypass AI, show date carousel directly
+  if (
+    userMessage.includes("我要預約取貨") ||
+    userMessage.includes("我要預約") ||
+    userMessage.includes("預約取貨") ||
+    userMessage.includes("約取貨") ||
+    userMessage.includes("我要約取貨")
+  ) {
+    if (userId) activateUser(userId);
+    await sendPickupDateCarousel(event.replyToken, userId);
+    if (userId) touchBotActivity(userId);
+    console.log("LINE: Pickup carousel triggered by keyword:", userMessage);
+    return;
+  }
+
   // "我的ID" → reply with LINE User ID (useful for owner setup)
   if (userMessage.trim() === "我的ID" || userMessage.trim() === "我的id") {
     const msg: TextMessage = {

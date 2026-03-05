@@ -16,11 +16,7 @@ const COMMON_REPLIES: QuickReplyItem[] = [
   },
   {
     type: "action",
-    action: { type: "message", label: "🚚 運費", text: "運費怎麼算？" },
-  },
-  {
-    type: "action",
-    action: { type: "message", label: "💳 付款方式", text: "有哪些付款方式？" },
+    action: { type: "message", label: "📅 我要預約取貨", text: "我要預約取貨" },
   },
   CALL_OWNER,
 ];
