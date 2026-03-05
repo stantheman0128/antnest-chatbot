@@ -19,38 +19,38 @@ export const maxDuration = 30;
 const recentEvents = new Map<string, number>();
 const DEDUP_TTL = 30_000; // 30 seconds
 
-// Human handoff: bot pauses for specific users
-interface PauseState {
-  pausedAt: number;
-  lastActivity: number;
+// Opt-in: bot is silent by default, activated by "呼叫小螞蟻"
+interface ActiveState {
+  activatedAt: number;
+  lastBotActivity: number;
 }
-const pausedUsers = new Map<string, PauseState>();
-const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min of no activity → auto-resume
+const activeUsers = new Map<string, ActiveState>();
+const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min without bot response → auto-deactivate
 
-function isUserPaused(userId: string): boolean {
-  const state = pausedUsers.get(userId);
+function isUserActive(userId: string): boolean {
+  const state = activeUsers.get(userId);
   if (!state) return false;
-  if (Date.now() - state.lastActivity > IDLE_TIMEOUT) {
-    pausedUsers.delete(userId);
+  if (Date.now() - state.lastBotActivity > IDLE_TIMEOUT) {
+    activeUsers.delete(userId);
     return false;
   }
   return true;
 }
 
-function pauseUser(userId: string) {
+function activateUser(userId: string) {
   const now = Date.now();
-  pausedUsers.set(userId, { pausedAt: now, lastActivity: now });
+  activeUsers.set(userId, { activatedAt: now, lastBotActivity: now });
 }
 
-function resumeUser(userId: string) {
-  pausedUsers.delete(userId);
+function deactivateUser(userId: string) {
+  activeUsers.delete(userId);
 }
 
-/** Reset idle timer — called when paused user sends a message */
-function touchPausedUser(userId: string) {
-  const state = pausedUsers.get(userId);
+/** Extend idle timeout — called after bot sends a message */
+function touchBotActivity(userId: string) {
+  const state = activeUsers.get(userId);
   if (state) {
-    state.lastActivity = Date.now();
+    state.lastBotActivity = Date.now();
   }
 }
 
@@ -214,6 +214,7 @@ async function handleBookSlot(replyToken: string, userId: string, slotId: string
     quickReply: getQuickReply(false),
   };
   await sendMessages(replyToken, userId, [confirmMsg]);
+  touchBotActivity(userId);
 
   notifyOwnerNewReservation({
     ...reservation,
@@ -234,9 +235,9 @@ async function handleTextMessage(
   const userId = event.source.userId;
   console.log("LINE message received:", userMessage);
 
-  // "呼叫闆娘" → pause bot, hand off to human
+  // "呼叫闆娘" → deactivate bot, hand off to human
   if (userMessage.includes("呼叫闆娘")) {
-    if (userId) pauseUser(userId);
+    if (userId) deactivateUser(userId);
     const msg: TextMessage = {
       type: "text",
       text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
@@ -247,9 +248,9 @@ async function handleTextMessage(
     return;
   }
 
-  // "呼叫客服" → resume bot
+  // "呼叫小螞蟻" → activate bot
   if (userMessage.includes("呼叫小螞蟻") || userMessage.includes("呼叫客服")) {
-    if (userId) resumeUser(userId);
+    if (userId) activateUser(userId);
     const msg: TextMessage = {
       type: "text",
       text: "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
@@ -277,10 +278,9 @@ async function handleTextMessage(
     return;
   }
 
-  // If bot is hard-paused for this user (manual "呼叫闆娘"), don't respond at all
-  if (userId && isUserPaused(userId)) {
-    touchPausedUser(userId);
-    console.log("LINE: Bot hard-paused for user, skipping", userId);
+  // Bot is opt-in — only respond if user has activated it
+  if (!userId || !isUserActive(userId)) {
+    console.log("LINE: Bot inactive for user, skipping:", userId);
     return;
   }
 
@@ -299,6 +299,7 @@ async function handleTextMessage(
       text: aiResponse.text || "這個問題幫你轉接闆娘～她會盡快回覆你喔！😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
       quickReply: getPausedQuickReply(),
     };
+    if (userId) deactivateUser(userId); // owner taking over
     await sendMessages(event.replyToken, userId, [msg]);
     console.log("LINE: AI escalated to human, reason:", aiResponse.escalateReason);
     return;
@@ -338,6 +339,7 @@ async function handleTextMessage(
   );
 
   await sendMessages(event.replyToken, userId, messages);
+  if (userId) touchBotActivity(userId);
 }
 
 export async function POST(req: NextRequest) {
