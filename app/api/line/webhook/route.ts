@@ -7,14 +7,23 @@ import {
 } from "@line/bot-sdk";
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
 import { buildProductCarousel } from "@/lib/flex-message";
-import { buildPickupDateCarousel } from "@/lib/pickup-flex";
+import { buildPickupDateCarousel, buildCustomerReservationFlex } from "@/lib/pickup-flex";
 import { getQuickReply, getPausedQuickReply } from "@/lib/quick-replies";
 import {
   getAvailableDates,
   getAvailabilityById,
   createReservation,
+  getLatestReservationByUser,
+  confirmReservation,
+  rejectReservation,
+  updateReservationStatus,
 } from "@/lib/data-service";
-import { notifyOwnerNewReservation } from "@/lib/notify";
+import {
+  notifyOwnerNewReservation,
+  notifyCustomerConfirmed,
+  notifyCustomerRejected,
+  notifyOwnerCancelledByCustomer,
+} from "@/lib/notify";
 
 // Extend Vercel function timeout (free plan: max 60s)
 export const maxDuration = 30;
@@ -60,7 +69,6 @@ function touchBotActivity(userId: string) {
 
 function isDuplicate(eventId: string): boolean {
   const now = Date.now();
-  // Clean old entries
   for (const [id, ts] of recentEvents) {
     if (now - ts > DEDUP_TTL) recentEvents.delete(id);
   }
@@ -76,38 +84,10 @@ function getLineClient() {
   });
 }
 
-/**
- * Show loading animation in LINE chat (the "typing..." bubble)
- * Duration: 5-60 seconds, automatically dismissed when reply is sent
- */
-async function showLoadingAnimation(userId: string) {
-  try {
-    await fetch("https://api.line.me/v2/bot/chat/loading/start", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-      },
-      body: JSON.stringify({
-        chatId: userId,
-        loadingSeconds: 30,
-      }),
-    });
-  } catch (error) {
-    console.error("Loading animation error:", error);
-  }
+async function pushMessages(userId: string, messages: Message | Message[]) {
+  await getLineClient().pushMessage(userId, messages as Message[]);
 }
 
-/**
- * Send messages using push API (doesn't need replyToken).
- */
-async function pushMessages(userId: string, messages: Message[]) {
-  await getLineClient().pushMessage(userId, messages);
-}
-
-/**
- * Try reply first (free), fall back to push (uses quota) if token is expired.
- */
 async function sendMessages(
   replyToken: string,
   userId: string | undefined,
@@ -116,13 +96,11 @@ async function sendMessages(
   try {
     await getLineClient().replyMessage(replyToken, messages);
   } catch (error: any) {
-    // replyToken already used (by CYBERBIZ) or expired → fall back to push
     if (userId && error?.statusCode === 400) {
       console.log("replyToken expired, falling back to push message");
       try {
         await pushMessages(userId, messages);
       } catch (pushError: any) {
-        // 429 = rate limited, just log and give up
         console.error("Push message failed:", pushError?.statusCode || pushError);
       }
     } else {
@@ -204,20 +182,16 @@ async function handlePickupTimeSelected(
     return;
   }
 
-  const d = new Date(avail.availableDate + "T00:00:00");
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
-  const w = WEEKDAYS[d.getDay()];
-
-  const confirmMsg: TextMessage = {
+  // Customer gets "pending" confirmation
+  const pendingMsg: TextMessage = {
     type: "text",
-    text: `✅ 預約成功！\n\n📅 ${m}月${day}日（週${w}）\n⏰ ${pickupTime.slice(0, 5)}\n\n有問題請聯繫闆娘 😊`,
+    text: "⏳ 預約申請送出！\n\n板娘確認後會在這裡通知你 😊\n\n如需修改請說「修改預約」",
     quickReply: getQuickReply(false),
   };
-  await sendMessages(replyToken, userId, [confirmMsg]);
+  await sendMessages(replyToken, userId, [pendingMsg]);
   touchBotActivity(userId);
 
+  // Notify owner with Flex + action buttons
   notifyOwnerNewReservation({
     ...reservation,
     availableDate: avail.availableDate,
@@ -276,7 +250,31 @@ async function handleTextMessage(
     return;
   }
 
-  // "我的ID" → reply with LINE User ID (useful for owner setup)
+  // 查詢/取消/修改預約 → bypass active check
+  if (
+    userId &&
+    (userMessage.includes("取消預約") ||
+      userMessage.includes("修改預約") ||
+      userMessage.includes("我的預約") ||
+      userMessage.includes("查看預約") ||
+      userMessage.includes("改預約"))
+  ) {
+    const reservation = await getLatestReservationByUser(userId);
+    if (!reservation) {
+      const msg: TextMessage = {
+        type: "text",
+        text: "查無預約紀錄喔！\n如需預約請點下方「我要預約取貨」😊",
+        quickReply: getPausedQuickReply(),
+      };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
+    const flex = buildCustomerReservationFlex(reservation);
+    await sendMessages(event.replyToken, userId, [flex as Message]);
+    return;
+  }
+
+  // "我的ID" → reply with LINE User ID
   if (userMessage.trim() === "我的ID" || userMessage.trim() === "我的id") {
     const msg: TextMessage = {
       type: "text",
@@ -294,13 +292,11 @@ async function handleTextMessage(
 
   const aiResponse = await generateAIResponse(userMessage, []);
 
-  // AI decided this message doesn't need a response → stay silent
   if (aiResponse.skip) {
     console.log("LINE: AI skipped message:", userMessage);
     return;
   }
 
-  // AI decided this needs human handoff → escalate
   if (aiResponse.escalate) {
     const msg: TextMessage = {
       type: "text",
@@ -313,7 +309,6 @@ async function handleTextMessage(
     return;
   }
 
-  // AI wants to show pickup slots → send Flex Carousel with DateTimePicker
   if (aiResponse.showPickupLink) {
     await sendPickupDateCarousel(event.replyToken, userId);
     console.log("LINE: Pickup date carousel sent to user");
@@ -321,7 +316,6 @@ async function handleTextMessage(
   }
 
   const hasProducts = aiResponse.productIds.length > 0;
-
   const maxTextSegments = hasProducts ? 2 : 3;
   const segments = splitResponse(aiResponse.text, maxTextSegments);
 
@@ -339,13 +333,6 @@ async function handleTextMessage(
     if (carousel) messages.push(carousel);
   }
 
-  console.log(
-    "LINE: AI response sent",
-    hasProducts
-      ? `with ${aiResponse.productIds.length} product cards`
-      : "(text only)"
-  );
-
   await sendMessages(event.replyToken, userId, messages);
   if (userId) touchBotActivity(userId);
 }
@@ -359,10 +346,83 @@ async function handlePostback(
 ) {
   const userId = event.source.userId;
   const data = event.postback.data;
-  const time = event.postback.params?.time; // e.g. "15:30"
+  const time = event.postback.params?.time;
 
+  // Customer selects time from DateTimePicker
   if (data.startsWith("PICK_TIME:") && userId && time) {
     await handlePickupTimeSelected(event.replyToken, userId, data, time);
+    return;
+  }
+
+  // Owner confirms reservation
+  if (data.startsWith("CONFIRM_RES:")) {
+    const id = data.replace("CONFIRM_RES:", "").trim();
+    const reservation = await confirmReservation(id);
+    if (!reservation) {
+      // Already confirmed or cancelled
+      const msg: TextMessage = { type: "text", text: "這筆預約已處理過了 🙂" };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
+    const msg: TextMessage = {
+      type: "text",
+      text: `✅ 已確認 ${reservation.displayName} 的預約！`,
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    if (reservation.lineUserId) {
+      notifyCustomerConfirmed(reservation.lineUserId, reservation).catch(console.error);
+    }
+    console.log("LINE: Owner confirmed reservation", id);
+    return;
+  }
+
+  // Owner rejects reservation
+  if (data.startsWith("REJECT_RES:")) {
+    const id = data.replace("REJECT_RES:", "").trim();
+    const reservation = await rejectReservation(id);
+    if (!reservation) {
+      const msg: TextMessage = { type: "text", text: "這筆預約已處理過了 🙂" };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
+    const msg: TextMessage = {
+      type: "text",
+      text: `❌ 已拒絕 ${reservation.displayName} 的預約`,
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    if (reservation.lineUserId) {
+      notifyCustomerRejected(reservation.lineUserId).catch(console.error);
+    }
+    console.log("LINE: Owner rejected reservation", id);
+    return;
+  }
+
+  // Customer cancels reservation
+  if (data.startsWith("CANCEL_MY_RES:") && userId) {
+    const id = data.replace("CANCEL_MY_RES:", "").trim();
+    // Fetch before cancelling for notification
+    const reservation = await getLatestReservationByUser(userId);
+    await updateReservationStatus(id, "cancelled");
+    const msg: TextMessage = {
+      type: "text",
+      text: "已取消你的預約 ✅\n\n如需重新預約，請點「我要預約取貨」😊",
+      quickReply: getPausedQuickReply(),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    if (reservation) {
+      notifyOwnerCancelledByCustomer(reservation).catch(console.error);
+    }
+    console.log("LINE: Customer cancelled reservation", id);
+    return;
+  }
+
+  // Customer wants to rebook (modify = cancel + rebook)
+  if (data.startsWith("REBOOK:") && userId) {
+    const id = data.replace("REBOOK:", "").trim();
+    await updateReservationStatus(id, "cancelled");
+    await sendPickupDateCarousel(event.replyToken, userId);
+    if (userId) touchBotActivity(userId);
+    console.log("LINE: Customer rebooking after cancelling", id);
     return;
   }
 
@@ -374,7 +434,6 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     const signature = req.headers.get("x-line-signature");
 
-    // Accept requests with or without signature (CYBERBIZ forwarding may or may not include it)
     if (!signature) {
       try {
         const parsed = JSON.parse(body);
@@ -391,7 +450,6 @@ export async function POST(req: NextRequest) {
 
     await Promise.all(
       events.map(async (event) => {
-        // Dedup using webhook event ID or message ID
         const eventId =
           (event.type === "message" ? event.message.id : undefined) ||
           (event as any).webhookEventId ||

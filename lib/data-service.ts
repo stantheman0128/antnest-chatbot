@@ -371,7 +371,7 @@ export interface Reservation {
   pickupTime: string;       // "15:30" — exact customer-requested time
   orderNumber: string | null;
   note: string | null;
-  status: "confirmed" | "cancelled" | "completed";
+  status: "pending" | "confirmed" | "cancelled" | "completed";
   createdAt: string;
   // joined
   availableDate?: string;
@@ -392,13 +392,13 @@ export async function getAvailableDates(): Promise<PickupAvailability[]> {
   if (error) { console.error("available dates fetch error:", error); return []; }
   if (!avails || avails.length === 0) return [];
 
-  // Count confirmed bookings per availability in one query
+  // Count pending + confirmed bookings per availability (both hold a spot)
   const ids = avails.map((a: any) => a.id);
   const { data: reservs } = await sb
     .from("reservations")
     .select("availability_id")
     .in("availability_id", ids)
-    .eq("status", "confirmed");
+    .in("status", ["pending", "confirmed"]);
 
   const counts = new Map<string, number>();
   for (const r of (reservs || [])) {
@@ -438,7 +438,7 @@ export async function getAllAvailabilities(): Promise<PickupAvailability[]> {
     .from("reservations")
     .select("availability_id")
     .in("availability_id", ids)
-    .eq("status", "confirmed");
+    .in("status", ["pending", "confirmed"]);
 
   const counts = new Map<string, number>();
   for (const r of (reservs || [])) {
@@ -471,7 +471,7 @@ export async function getAvailabilityById(id: string): Promise<PickupAvailabilit
     .from("reservations")
     .select("*", { count: "exact", head: true })
     .eq("availability_id", id)
-    .eq("status", "confirmed");
+    .in("status", ["pending", "confirmed"]);
 
   return {
     id: data.id,
@@ -541,7 +541,7 @@ export async function createReservation(input: {
       pickup_time: input.pickupTime,
       order_number: input.orderNumber || null,
       note: input.note || null,
-      status: "confirmed",
+      status: "pending",
     })
     .select()
     .single();
@@ -587,6 +587,52 @@ export async function updateReservationStatus(
   const { error } = await sb.from("reservations").update({ status }).eq("id", id);
   if (error) { console.error("reservation update error:", error); return false; }
   return true;
+}
+
+/** Returns most recent pending/confirmed reservation for a LINE user (for cancel/modify flow). */
+export async function getLatestReservationByUser(lineUserId: string): Promise<Reservation | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("reservations")
+    .select("*, pickup_availability(available_date)")
+    .eq("line_user_id", lineUserId)
+    .in("status", ["pending", "confirmed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (error || !data) return null;
+  return { ...mapDbReservation(data), availableDate: data.pickup_availability?.available_date };
+}
+
+/** Owner confirms a pending reservation → status = confirmed. Returns null if already non-pending. */
+export async function confirmReservation(id: string): Promise<Reservation | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("reservations")
+    .update({ status: "confirmed" })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("*, pickup_availability(available_date)")
+    .single();
+  if (error || !data) return null;
+  return { ...mapDbReservation(data), availableDate: data.pickup_availability?.available_date };
+}
+
+/** Owner rejects a pending reservation → status = cancelled. */
+export async function rejectReservation(id: string): Promise<Reservation | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("reservations")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+    .in("status", ["pending", "confirmed"])
+    .select("*, pickup_availability(available_date)")
+    .single();
+  if (error || !data) return null;
+  return { ...mapDbReservation(data), availableDate: data.pickup_availability?.available_date };
 }
 
 function mapDbReservation(row: any): Reservation {

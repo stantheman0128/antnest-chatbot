@@ -19,7 +19,7 @@ interface Reservation {
   orderNumber: string | null;
   note: string | null;
   pickupTime: string;
-  status: "confirmed" | "cancelled" | "completed";
+  status: "pending" | "confirmed" | "cancelled" | "completed";
   createdAt: string;
   availableDate?: string;
 }
@@ -27,9 +27,10 @@ interface Reservation {
 const WEEKDAY_ZH = ["日", "一", "二", "三", "四", "五", "六"];
 
 const STATUS_LABEL: Record<string, string> = {
-  confirmed: "已確認",
-  completed: "已完成",
-  cancelled: "已取消",
+  pending: "⏳ 待確認",
+  confirmed: "✅ 已確認",
+  completed: "🏁 已完成",
+  cancelled: "❌ 已取消",
 };
 
 function formatDate(dateStr: string) {
@@ -404,7 +405,9 @@ export default function PickupPage() {
                     <p className="font-bold text-amber-900">{r.displayName}</p>
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full ${
-                        r.status === "confirmed"
+                        r.status === "pending"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : r.status === "confirmed"
                           ? "bg-green-100 text-green-700"
                           : r.status === "completed"
                           ? "bg-gray-100 text-gray-600"
@@ -429,6 +432,22 @@ export default function PickupPage() {
                     <p className="text-xs text-gray-500 mt-0.5 italic">{r.note}</p>
                   )}
                 </div>
+                {r.status === "pending" && (
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button
+                      onClick={() => updateStatus(r.id, "confirmed")}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100"
+                    >
+                      確認
+                    </button>
+                    <button
+                      onClick={() => updateStatus(r.id, "cancelled")}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100"
+                    >
+                      拒絕
+                    </button>
+                  </div>
+                )}
                 {r.status === "confirmed" && (
                   <div className="flex flex-col gap-1 shrink-0">
                     <button
