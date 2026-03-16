@@ -5,7 +5,7 @@ import { verifyAdmin } from "@/lib/admin-auth";
 const CYBERBIZ_BASE = "https://antnest.cyberbiz.co";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
 
-/** Extract product handles from sitemap.xml + /collections/all (catches products missing from sitemap) */
+/** Extract product handles from sitemap.xml + window.c12t analytics data in collections page */
 async function getProductHandles(): Promise<string[]> {
   const handles = new Set<string>();
 
@@ -21,17 +21,29 @@ async function getProductHandles(): Promise<string[]> {
         handles.add(m[1]);
       }
     }
-  } catch { /* ignore, fall through to collection page */ }
+  } catch { /* ignore */ }
 
-  // Source 2: /collections/all — catches products not yet in sitemap
+  // Source 2: /collections/all.json — contains window.c12t.impressions with all product handles
   try {
-    const res = await fetch(`${CYBERBIZ_BASE}/collections/all`, {
+    const res = await fetch(`${CYBERBIZ_BASE}/collections/all.json?limit=250`, {
       headers: { "User-Agent": UA },
       next: { revalidate: 0 },
     });
     if (res.ok) {
       const html = await res.text();
-      for (const m of html.matchAll(/\/products\/([^"'?\s/]+)/g)) {
+      // Extract from window.c12t.impressions: handles appear as "id":"handle" entries
+      const c12tMatch = html.match(/window\.c12t\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+      if (c12tMatch) {
+        try {
+          const data = JSON.parse(c12tMatch[1]);
+          const impressions: any[] = data?.impressions || [];
+          for (const item of impressions) {
+            if (item?.id) handles.add(String(item.id));
+          }
+        } catch { /* parse failed, fall through to regex */ }
+      }
+      // Fallback: any /products/xxx pattern in the page
+      for (const m of html.matchAll(/\/products\/([a-z0-9][a-z0-9\-]*[a-z0-9])/g)) {
         handles.add(m[1]);
       }
     }
