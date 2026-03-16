@@ -5,15 +5,39 @@ import { verifyAdmin } from "@/lib/admin-auth";
 const CYBERBIZ_BASE = "https://antnest.cyberbiz.co";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
 
-/** Extract product handles from sitemap.xml */
+/** Extract product handles from sitemap.xml + /collections/all (catches products missing from sitemap) */
 async function getProductHandles(): Promise<string[]> {
-  const res = await fetch(`${CYBERBIZ_BASE}/sitemap.xml`, {
-    headers: { "User-Agent": UA },
-    next: { revalidate: 0 },
-  });
-  const xml = await res.text();
-  const matches = [...xml.matchAll(/\/products\/([^<\s]+)/g)];
-  return [...new Set(matches.map((m) => m[1]))];
+  const handles = new Set<string>();
+
+  // Source 1: sitemap.xml
+  try {
+    const res = await fetch(`${CYBERBIZ_BASE}/sitemap.xml`, {
+      headers: { "User-Agent": UA },
+      next: { revalidate: 0 },
+    });
+    if (res.ok) {
+      const xml = await res.text();
+      for (const m of xml.matchAll(/\/products\/([^<\s"']+)/g)) {
+        handles.add(m[1]);
+      }
+    }
+  } catch { /* ignore, fall through to collection page */ }
+
+  // Source 2: /collections/all — catches products not yet in sitemap
+  try {
+    const res = await fetch(`${CYBERBIZ_BASE}/collections/all`, {
+      headers: { "User-Agent": UA },
+      next: { revalidate: 0 },
+    });
+    if (res.ok) {
+      const html = await res.text();
+      for (const m of html.matchAll(/\/products\/([^"'?\s/]+)/g)) {
+        handles.add(m[1]);
+      }
+    }
+  } catch { /* ignore */ }
+
+  return [...handles];
 }
 
 interface ScrapedProduct {
