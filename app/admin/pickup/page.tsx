@@ -27,10 +27,17 @@ interface Reservation {
 const WEEKDAY_ZH = ["日", "一", "二", "三", "四", "五", "六"];
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "⏳ 待確認",
-  confirmed: "✅ 已確認",
-  completed: "🏁 已完成",
-  cancelled: "❌ 已取消",
+  pending: "待確認",
+  confirmed: "已確認",
+  completed: "已完成",
+  cancelled: "已取消",
+};
+
+const STATUS_STYLE: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700",
+  confirmed: "bg-green-50 text-green-700",
+  completed: "bg-stone-100 text-stone-500",
+  cancelled: "bg-red-50 text-red-500",
 };
 
 function formatDate(dateStr: string) {
@@ -136,7 +143,7 @@ export default function PickupPage() {
         }),
       });
       if (res.ok) {
-        showToast(`已套用 ${selectedDates.size} 個日期 ✅`);
+        showToast(`已套用 ${selectedDates.size} 個日期`);
         setSelectedDates(new Set());
         await fetchAvailabilities();
       } else {
@@ -175,17 +182,14 @@ export default function PickupPage() {
     }
   }
 
-  // Set of existing availability dates (for dot indicator on calendar)
   const existingDateSet = new Set(availabilities.map((a) => a.availableDate));
   const todayStr = today.toISOString().split("T")[0];
-
-  // Calendar rendering
   const daysInMonth = getDaysInMonth(calYear, calMonth);
   const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
   const monthLabel = `${calYear}年${calMonth + 1}月`;
 
   function toggleDate(dateStr: string) {
-    if (dateStr < todayStr) return; // can't select past dates
+    if (dateStr < todayStr) return;
     setSelectedDates((prev) => {
       const next = new Set(prev);
       if (next.has(dateStr)) next.delete(dateStr);
@@ -206,25 +210,27 @@ export default function PickupPage() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold text-amber-900">取貨預約管理</h2>
+      <h1 className="text-[17px] font-semibold text-stone-800">取貨預約管理</h1>
 
       {toast && (
-        <div className="bg-green-50 text-green-800 px-4 py-3 rounded-xl text-sm">{toast}</div>
+        <div className="bg-amber-50 text-amber-800 px-4 py-2.5 rounded-xl text-[12px]">
+          {toast}
+        </div>
       )}
 
       {/* Tabs */}
-      <div className="flex rounded-xl overflow-hidden border border-amber-200">
+      <div className="flex bg-white rounded-xl border border-stone-200 p-1 gap-1">
         {(["dates", "reservations"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 text-[13px] font-medium rounded-lg transition-colors ${
               tab === t
-                ? "bg-amber-800 text-white"
-                : "bg-white text-amber-700 hover:bg-amber-50"
+                ? "bg-amber-800 text-white shadow-sm"
+                : "text-stone-500 hover:text-stone-700"
             }`}
           >
-            {t === "dates" ? "📅 可取貨日期" : "📋 預約紀錄"}
+            {t === "dates" ? "可取貨日期" : "預約紀錄"}
           </button>
         ))}
       </div>
@@ -233,24 +239,38 @@ export default function PickupPage() {
       {tab === "dates" && (
         <div className="space-y-4">
           {/* Calendar */}
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            {/* Month nav */}
-            <div className="flex items-center justify-between mb-3">
-              <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-amber-50 text-amber-700 font-bold">‹</button>
-              <span className="font-bold text-amber-900">{monthLabel}</span>
-              <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-amber-50 text-amber-700 font-bold">›</button>
+          <div className="bg-white rounded-2xl border border-stone-100 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={prevMonth}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-600 transition-colors"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <span className="text-[14px] font-semibold text-stone-800">{monthLabel}</span>
+              <button
+                onClick={nextMonth}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-600 transition-colors"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
+              </button>
             </div>
 
             {/* Weekday headers */}
             <div className="grid grid-cols-7 mb-1">
               {WEEKDAY_ZH.map((w) => (
-                <div key={w} className="text-center text-xs text-gray-400 py-1">{w}</div>
+                <div key={w} className="text-center text-[11px] text-stone-400 py-1 font-medium">
+                  {w}
+                </div>
               ))}
             </div>
 
             {/* Day cells */}
             <div className="grid grid-cols-7 gap-y-1">
-              {/* Leading empty cells */}
               {Array.from({ length: firstDayOfWeek }).map((_, i) => (
                 <div key={`empty-${i}`} />
               ))}
@@ -263,16 +283,15 @@ export default function PickupPage() {
                     key={dateStr}
                     onClick={() => toggleDate(dateStr)}
                     disabled={isPast}
-                    className={`relative w-9 h-9 mx-auto flex items-center justify-center rounded-full text-sm font-medium transition-colors
-                      ${isPast ? "text-gray-300 cursor-not-allowed" : ""}
+                    className={`relative w-9 h-9 mx-auto flex items-center justify-center rounded-full text-[13px] font-medium transition-colors
+                      ${isPast ? "text-stone-300 cursor-not-allowed" : ""}
                       ${!isPast && isSelected ? "bg-amber-800 text-white" : ""}
-                      ${!isPast && !isSelected ? "hover:bg-amber-100 text-amber-900" : ""}
+                      ${!isPast && !isSelected ? "hover:bg-stone-100 text-stone-800" : ""}
                     `}
                   >
                     {new Date(dateStr + "T00:00:00").getDate()}
-                    {/* Dot: existing availability */}
                     {hasAvail && !isSelected && (
-                      <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-400" />
+                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-amber-400" />
                     )}
                   </button>
                 );
@@ -280,78 +299,100 @@ export default function PickupPage() {
             </div>
 
             {selectedDates.size > 0 && (
-              <p className="text-center text-xs text-amber-600 mt-2">
+              <p className="text-center text-[11px] text-amber-700 mt-2 font-medium">
                 已選 {selectedDates.size} 天
               </p>
             )}
           </div>
 
           {/* Time window form */}
-          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-sm font-bold text-amber-900">套用設定到已選日期</p>
+          <div className="bg-white rounded-2xl border border-stone-100 p-4 space-y-3">
+            <p className="text-[13px] font-semibold text-stone-800">套用設定到已選日期</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-amber-700 block mb-1">開始時間</label>
+                <label className="text-[10px] font-semibold text-stone-400 block mb-1.5 uppercase tracking-widest">
+                  開始時間
+                </label>
                 <input
                   type="time"
                   value={formStartTime}
                   onChange={(e) => setFormStartTime(e.target.value)}
-                  className="w-full border border-amber-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors"
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-amber-700 block mb-1">結束時間</label>
+                <label className="text-[10px] font-semibold text-stone-400 block mb-1.5 uppercase tracking-widest">
+                  結束時間
+                </label>
                 <input
                   type="time"
                   value={formEndTime}
                   onChange={(e) => setFormEndTime(e.target.value)}
-                  className="w-full border border-amber-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full border border-stone-200 rounded-xl px-3 py-2 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors"
                 />
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-amber-700 block mb-1">最多預約人數</label>
+              <label className="text-[10px] font-semibold text-stone-400 block mb-1.5 uppercase tracking-widest">
+                最多預約人數
+              </label>
               <input
                 type="number"
                 min={1}
                 max={50}
                 value={formMaxBookings}
                 onChange={(e) => setFormMaxBookings(Number(e.target.value))}
-                className="w-full border border-amber-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full border border-stone-200 rounded-xl px-3 py-2 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors"
               />
             </div>
             <button
               onClick={applyDates}
               disabled={saving || selectedDates.size === 0}
-              className="w-full py-3 bg-amber-800 text-white rounded-xl font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors"
+              className="w-full py-2.5 bg-amber-800 text-white rounded-xl text-[14px] font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors"
             >
               {saving ? "套用中..." : `套用到 ${selectedDates.size} 個日期`}
             </button>
-            <p className="text-xs text-amber-500">顧客在 LINE 選擇日期後可在此時段內自由選取貨時間</p>
+            <p className="text-[11px] text-stone-400">
+              顧客在 LINE 選擇日期後可在此時段內自由選取貨時間
+            </p>
           </div>
 
-          {/* Existing availabilities list */}
+          {/* Existing availabilities */}
           <div className="space-y-2">
-            <p className="text-sm font-bold text-amber-800 px-1">已設定的日期</p>
-            {loadingDates && <p className="text-center text-amber-600 py-4 text-sm">載入中...</p>}
+            <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-1">
+              已設定的日期
+            </p>
+            {loadingDates && (
+              <div className="flex justify-center py-6">
+                <div className="w-4 h-4 rounded-full border-2 border-amber-800 border-t-transparent animate-spin" />
+              </div>
+            )}
             {!loadingDates && availabilities.length === 0 && (
-              <div className="text-center py-8 text-gray-400">
-                <p className="text-3xl mb-2">📅</p>
-                <p className="text-sm">還沒有設定取貨日期</p>
-                <p className="text-xs mt-1">在上方日曆選擇日期後套用</p>
+              <div className="bg-white rounded-2xl border border-stone-100 py-10 text-center">
+                <p className="text-[13px] text-stone-400">還沒有設定取貨日期</p>
+                <p className="text-[11px] text-stone-300 mt-1">在上方日曆選擇日期後套用</p>
               </div>
             )}
             {availabilities.map((avail) => (
-              <div key={avail.id} className="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between">
+              <div
+                key={avail.id}
+                className="bg-white rounded-xl border border-stone-100 px-4 py-3 flex items-center justify-between"
+              >
                 <div>
-                  <p className="font-bold text-amber-900 text-sm">{formatDate(avail.availableDate)}</p>
-                  <p className="text-xs text-amber-600">
-                    {avail.startTime.slice(0, 5)}–{avail.endTime.slice(0, 5)} · 上限 {avail.maxBookings} 人 · 已預約 {avail.currentBookings}
+                  <p className="text-[14px] font-semibold text-stone-800">
+                    {formatDate(avail.availableDate)}
+                  </p>
+                  <p className="text-[11px] text-stone-400 mt-0.5">
+                    {avail.startTime.slice(0, 5)}–{avail.endTime.slice(0, 5)}
+                    <span className="mx-1.5 text-stone-300">·</span>
+                    上限 {avail.maxBookings} 人
+                    <span className="mx-1.5 text-stone-300">·</span>
+                    已預約 {avail.currentBookings}
                   </p>
                 </div>
                 <button
                   onClick={() => deleteAvailability(avail.id)}
-                  className="text-xs px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+                  className="text-[12px] px-2.5 py-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   刪除
                 </button>
@@ -372,7 +413,7 @@ export default function PickupPage() {
                 setDateFilter(e.target.value);
                 fetchReservations(e.target.value || undefined);
               }}
-              className="flex-1 border border-amber-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-[13px] text-stone-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors"
             />
             {dateFilter && (
               <button
@@ -380,7 +421,7 @@ export default function PickupPage() {
                   setDateFilter("");
                   fetchReservations();
                 }}
-                className="text-sm text-amber-600 hover:text-amber-800 px-2"
+                className="text-[12px] text-stone-400 hover:text-stone-600 px-2 transition-colors"
               >
                 清除
               </button>
@@ -388,82 +429,91 @@ export default function PickupPage() {
           </div>
 
           {reservations.length === 0 && (
-            <div className="text-center py-10 text-gray-400">
-              <p className="text-3xl mb-2">📭</p>
-              <p className="text-sm">{dateFilter ? "這天沒有預約" : "還沒有預約紀錄"}</p>
+            <div className="bg-white rounded-2xl border border-stone-100 py-10 text-center">
+              <p className="text-[13px] text-stone-400">
+                {dateFilter ? "這天沒有預約" : "還沒有預約紀錄"}
+              </p>
             </div>
           )}
 
           {reservations.map((r) => (
             <div
               key={r.id}
-              className={`bg-white rounded-xl p-4 shadow-sm ${r.status === "cancelled" ? "opacity-50" : ""}`}
+              className={`bg-white rounded-2xl border border-stone-100 p-4 ${
+                r.status === "cancelled" ? "opacity-50" : ""
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-bold text-amber-900">{r.displayName}</p>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <p className="text-[14px] font-semibold text-stone-800">
+                      {r.displayName}
+                    </p>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        r.status === "pending"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : r.status === "confirmed"
-                          ? "bg-green-100 text-green-700"
-                          : r.status === "completed"
-                          ? "bg-gray-100 text-gray-600"
-                          : "bg-red-100 text-red-600"
+                      className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                        STATUS_STYLE[r.status] || "bg-stone-100 text-stone-500"
                       }`}
                     >
                       {STATUS_LABEL[r.status]}
                     </span>
                   </div>
                   {r.availableDate && (
-                    <p className="text-sm text-amber-700">
-                      📅 {formatDate(r.availableDate)} ⏰ {r.pickupTime?.slice(0, 5)}
+                    <p className="text-[12px] text-stone-500">
+                      {formatDate(r.availableDate)}
+                      <span className="mx-1 text-stone-300">·</span>
+                      {r.pickupTime?.slice(0, 5)}
                     </p>
                   )}
                   {r.lineUserId && (
-                    <p className="text-xs text-gray-400 mt-0.5">LINE: {r.lineUserId}</p>
+                    <p className="text-[11px] text-stone-400 mt-0.5 font-mono">
+                      {r.lineUserId}
+                    </p>
                   )}
                   {r.orderNumber && (
-                    <p className="text-xs text-gray-500 mt-0.5">訂單：{r.orderNumber}</p>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      訂單：{r.orderNumber}
+                    </p>
                   )}
                   {r.note && (
-                    <p className="text-xs text-gray-500 mt-0.5 italic">{r.note}</p>
+                    <p className="text-[11px] text-stone-400 mt-0.5 italic">
+                      {r.note}
+                    </p>
                   )}
                 </div>
-                {r.status === "pending" && (
-                  <div className="flex flex-col gap-1 shrink-0">
-                    <button
-                      onClick={() => updateStatus(r.id, "confirmed")}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100"
-                    >
-                      確認
-                    </button>
-                    <button
-                      onClick={() => updateStatus(r.id, "cancelled")}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100"
-                    >
-                      拒絕
-                    </button>
-                  </div>
-                )}
-                {r.status === "confirmed" && (
-                  <div className="flex flex-col gap-1 shrink-0">
-                    <button
-                      onClick={() => updateStatus(r.id, "completed")}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100"
-                    >
-                      完成
-                    </button>
-                    <button
-                      onClick={() => updateStatus(r.id, "cancelled")}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100"
-                    >
-                      取消
-                    </button>
-                  </div>
-                )}
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  {r.status === "pending" && (
+                    <>
+                      <button
+                        onClick={() => updateStatus(r.id, "confirmed")}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+                      >
+                        確認
+                      </button>
+                      <button
+                        onClick={() => updateStatus(r.id, "cancelled")}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                      >
+                        拒絕
+                      </button>
+                    </>
+                  )}
+                  {r.status === "confirmed" && (
+                    <>
+                      <button
+                        onClick={() => updateStatus(r.id, "completed")}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-stone-100 text-stone-600 hover:bg-stone-200 transition-colors"
+                      >
+                        完成
+                      </button>
+                      <button
+                        onClick={() => updateStatus(r.id, "cancelled")}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                      >
+                        取消
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           ))}

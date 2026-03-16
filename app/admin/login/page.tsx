@@ -39,52 +39,80 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-amber-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-lg p-6">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-amber-900">🐜 螞蟻窩管理</h1>
-          <p className="text-amber-600 text-sm mt-1">管理後台登入</p>
+    <div className="min-h-screen flex items-center justify-center px-5 bg-stone-50">
+      <div className="w-full max-w-[340px]">
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-11 h-11 rounded-2xl bg-amber-800 flex items-center justify-center mb-3 shadow-sm">
+            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none">
+              <ellipse cx="12" cy="7" rx="3" ry="2" fill="white" opacity="0.95" />
+              <ellipse cx="12" cy="13.5" rx="3.5" ry="2.5" fill="white" opacity="0.95" />
+              <ellipse cx="12" cy="19.5" rx="2.5" ry="1.8" fill="white" opacity="0.7" />
+              <line x1="9" y1="12" x2="5.5" y2="10.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+              <line x1="9" y1="14" x2="5.5" y2="15" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+              <line x1="15" y1="12" x2="18.5" y2="10.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+              <line x1="15" y1="14" x2="18.5" y2="15" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+            </svg>
+          </div>
+          <h1 className="text-[17px] font-semibold text-stone-800 tracking-tight">螞蟻窩管理後台</h1>
+          <p className="text-[12px] text-stone-400 mt-0.5">請登入以繼續</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-gray-900"
-              required
-            />
-          </div>
+        {/* Form */}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-[14px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors placeholder:text-stone-300"
+                placeholder="admin@example.com"
+                required
+                autoComplete="email"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              密碼
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 text-gray-900"
-              required
-            />
-          </div>
+            <div>
+              <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
+                密碼
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-[14px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors placeholder:text-stone-300"
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+              />
+              {error && (
+                <p className="mt-2 text-[12px] text-red-500">{error}</p>
+              )}
+            </div>
 
-          {error && (
-            <p className="text-red-600 text-sm">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-amber-800 text-white py-2.5 rounded-lg font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors"
-          >
-            {loading ? "登入中..." : "登入"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-amber-800 text-white py-2.5 rounded-xl text-[14px] font-medium hover:bg-amber-900 active:scale-[0.98] disabled:opacity-60 transition-all mt-1"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  登入中
+                </span>
+              ) : (
+                "登入"
+              )}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
