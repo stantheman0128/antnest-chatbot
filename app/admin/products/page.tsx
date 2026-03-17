@@ -49,7 +49,7 @@ export default function ProductsPage() {
       if (res.ok) {
         const data = await res.json();
         setSyncResult(
-          `同步完成！新增 ${data.added} 個・更新 ${data.updated} 個・下架 ${data.deactivated} 個`
+          `同步完成 · 新增 ${data.added} · 更新 ${data.updated} · 下架 ${data.deactivated}`
         );
         await fetchProducts();
       } else {
@@ -80,95 +80,120 @@ export default function ProductsPage() {
   }
 
   if (loading) {
-    return <p className="text-amber-800 text-center py-8">載入中...</p>;
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-5 h-5 rounded-full border-2 border-amber-800 border-t-transparent animate-spin" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-amber-900">產品管理</h2>
-        <div className="flex gap-2">
+        <h1 className="text-[17px] font-semibold text-stone-800">產品管理</h1>
+        <div className="flex items-center gap-2">
           <button
             onClick={syncFromCyberbiz}
             disabled={syncing}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-stone-300 rounded-lg text-[12px] font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-colors"
           >
-            {syncing ? "同步中..." : "🔄 同步官網"}
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}
+            >
+              <path
+                fillRule="evenodd"
+                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {syncing ? "同步中" : "同步官網"}
           </button>
           <Link
             href="/admin/products/new"
-            className="bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-900"
+            className="flex items-center gap-1 px-3 py-1.5 bg-amber-800 rounded-lg text-[12px] font-medium text-white hover:bg-amber-900 transition-colors"
           >
-            + 新增
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path
+                fillRule="evenodd"
+                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            新增
           </Link>
         </div>
       </div>
 
       {syncResult && (
-        <div className="bg-blue-50 text-blue-800 px-4 py-3 rounded-xl text-sm">
+        <div
+          className={`px-4 py-2.5 rounded-xl text-[12px] ${
+            syncResult.includes("失敗")
+              ? "bg-red-50 text-red-600"
+              : "bg-amber-50 text-amber-800"
+          }`}
+        >
           {syncResult}
         </div>
       )}
 
-      <div className="space-y-3">
-        {products.map((product) => (
+      {/* Product list */}
+      <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+        {products.length === 0 && (
+          <div className="py-12 text-center text-[13px] text-stone-400">
+            還沒有產品
+          </div>
+        )}
+        {products.map((product, idx) => (
           <div
             key={product.id}
-            className={`bg-white rounded-xl p-4 shadow-sm ${
-              !product.isActive ? "opacity-60" : ""
-            }`}
+            className={`flex items-center gap-3 px-4 py-3 ${
+              !product.isActive ? "opacity-50" : ""
+            } ${idx < products.length - 1 ? "border-b border-stone-100" : ""}`}
           >
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/admin/products/${product.id}`}
-                    className="font-medium text-amber-900 hover:underline truncate"
-                  >
-                    {product.name}
-                  </Link>
-                  {!product.isActive && (
-                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                      已下架
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-amber-700 mt-0.5">{product.price}</p>
-                <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                  {product.description}
-                </p>
-                {product.badges.length > 0 && (
-                  <div className="flex gap-1 mt-1.5 flex-wrap">
-                    {product.badges.map((badge, i) => (
-                      <span
-                        key={i}
-                        className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full"
-                      >
-                        {badge}
-                      </span>
-                    ))}
-                  </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link
+                  href={`/admin/products/${product.id}`}
+                  className="text-[14px] font-medium text-stone-800 hover:text-amber-800 transition-colors"
+                >
+                  {product.name}
+                </Link>
+                {!product.isActive && (
+                  <span className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-400 rounded-full shrink-0">
+                    下架
+                  </span>
                 )}
               </div>
-
-              <button
-                onClick={() => toggleActive(product)}
-                className={`ml-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  product.isActive
-                    ? "bg-red-50 text-red-600 hover:bg-red-100"
-                    : "bg-green-50 text-green-600 hover:bg-green-100"
-                }`}
-              >
-                {product.isActive ? "下架" : "上架"}
-              </button>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-[12px] text-amber-700 font-medium">
+                  {product.price}
+                </span>
+                {product.badges.slice(0, 2).map((badge, i) => (
+                  <span
+                    key={i}
+                    className="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded-full"
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
             </div>
+            <button
+              onClick={() => toggleActive(product)}
+              className={`shrink-0 px-2.5 py-1 rounded-lg text-[12px] font-medium transition-colors ${
+                product.isActive
+                  ? "text-stone-400 hover:bg-stone-100 hover:text-stone-600"
+                  : "text-amber-700 hover:bg-amber-50"
+              }`}
+            >
+              {product.isActive ? "下架" : "上架"}
+            </button>
           </div>
         ))}
       </div>
-
-      {products.length === 0 && (
-        <p className="text-center text-gray-500 py-8">還沒有產品</p>
-      )}
     </div>
   );
 }

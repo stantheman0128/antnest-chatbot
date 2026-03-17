@@ -120,39 +120,51 @@ export default function ExamplesPage() {
   }
 
   if (loading) {
-    return <p className="text-amber-800 text-center py-8">載入中...</p>;
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-5 h-5 rounded-full border-2 border-amber-800 border-t-transparent animate-spin" />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-amber-900">對話範例教學</h2>
-          <p className="text-xs text-amber-600 mt-0.5">
-            新增範例後，機器人會學習照此模式回應
+          <h1 className="text-[17px] font-semibold text-stone-800">對話範例</h1>
+          <p className="text-[11px] text-stone-400 mt-0.5">
+            新增後機器人會學習照此模式回應
           </p>
         </div>
         <button
           onClick={openNew}
-          className="bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-900"
+          className="flex items-center gap-1 px-3 py-1.5 bg-amber-800 rounded-lg text-[12px] font-medium text-white hover:bg-amber-900 transition-colors"
         >
-          + 新增
+          <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+            <path
+              fillRule="evenodd"
+              d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+          新增
         </button>
       </div>
 
       {toast && (
-        <div className="bg-green-50 text-green-800 px-4 py-3 rounded-xl text-sm">
+        <div
+          className={`px-4 py-2.5 rounded-xl text-[12px] ${
+            toast.includes("失敗") ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-800"
+          }`}
+        >
           {toast}
         </div>
       )}
 
       {examples.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-4xl mb-3">💬</p>
-          <p className="font-medium">還沒有對話範例</p>
-          <p className="text-sm mt-1">
-            新增範例來教機器人正確的回應方式
-          </p>
+        <div className="bg-white rounded-2xl border border-stone-100 py-12 text-center">
+          <p className="text-[13px] font-medium text-stone-600 mb-1">還沒有對話範例</p>
+          <p className="text-[12px] text-stone-400">新增範例來教機器人正確的回應方式</p>
         </div>
       )}
 
@@ -160,77 +172,92 @@ export default function ExamplesPage() {
         {examples.map((example) => (
           <div
             key={example.id}
-            className={`bg-white rounded-xl p-4 shadow-sm ${
+            className={`bg-white rounded-2xl border border-stone-100 overflow-hidden ${
               !example.isActive ? "opacity-50" : ""
             }`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2">
-                  {!example.isActive && (
-                    <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">
-                      已停用
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <div className="text-sm">
-                    <span className="text-gray-500 text-xs">顧客說：</span>
-                    <p className="text-amber-900 font-medium line-clamp-2">
-                      「{example.customerMessage}」
-                    </p>
-                  </div>
-                  <div className="text-sm">
-                    <span className="text-gray-500 text-xs">機器人回：</span>
-                    <p className="text-green-800 line-clamp-2">
-                      「{example.correctResponse}」
-                    </p>
-                  </div>
-                  {example.note && (
-                    <p className="text-xs text-gray-400 italic">{example.note}</p>
-                  )}
+            {/* Conversation preview */}
+            <div className="px-4 pt-4 pb-3 space-y-2">
+              {!example.isActive && (
+                <span className="inline-block text-[10px] px-2 py-0.5 bg-stone-100 text-stone-400 rounded-full mb-1">
+                  已停用
+                </span>
+              )}
+              <div className="flex gap-2.5 items-start">
+                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0 text-right">顧客</span>
+                <div className="flex-1 bg-stone-100 rounded-2xl rounded-tl-md px-3 py-2">
+                  <p className="text-[13px] text-stone-700 leading-relaxed">
+                    {example.customerMessage}
+                  </p>
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5 shrink-0">
-                <button
-                  onClick={() => openEdit(example)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-800 hover:bg-amber-100"
-                >
-                  編輯
-                </button>
-                <button
-                  onClick={() => toggleActive(example)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-                    example.isActive
-                      ? "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                      : "bg-green-50 text-green-600 hover:bg-green-100"
-                  }`}
-                >
-                  {example.isActive ? "停用" : "啟用"}
-                </button>
-                <button
-                  onClick={() => remove(example.id)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100"
-                >
-                  刪除
-                </button>
+              <div className="flex gap-2.5 items-start justify-end">
+                <div className="flex-1 bg-amber-50 rounded-2xl rounded-tr-md px-3 py-2">
+                  <p className="text-[13px] text-amber-900 leading-relaxed">
+                    {example.correctResponse}
+                  </p>
+                </div>
+                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0">機器人</span>
               </div>
+              {example.note && (
+                <p className="text-[11px] text-stone-400 italic pl-12">{example.note}</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex border-t border-stone-100">
+              <button
+                onClick={() => openEdit(example)}
+                className="flex-1 py-2.5 text-[12px] font-medium text-stone-500 hover:bg-stone-50 transition-colors border-r border-stone-100"
+              >
+                編輯
+              </button>
+              <button
+                onClick={() => toggleActive(example)}
+                className={`flex-1 py-2.5 text-[12px] font-medium transition-colors border-r border-stone-100 ${
+                  example.isActive
+                    ? "text-stone-500 hover:bg-stone-50"
+                    : "text-amber-700 hover:bg-amber-50"
+                }`}
+              >
+                {example.isActive ? "停用" : "啟用"}
+              </button>
+              <button
+                onClick={() => remove(example.id)}
+                className="flex-1 py-2.5 text-[12px] font-medium text-red-400 hover:bg-red-50 transition-colors"
+              >
+                刪除
+              </button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Modal */}
+      {/* Edit modal */}
       {modal.open && modal.editing && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg p-5 space-y-4">
-            <h3 className="text-lg font-bold text-amber-900">
-              {modal.editing.id ? "編輯範例" : "新增範例"}
-            </h3>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden">
+            <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
+              <h3 className="text-[14px] font-semibold text-stone-800">
+                {modal.editing.id ? "編輯範例" : "新增範例"}
+              </h3>
+              <button
+                onClick={closeModal}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-400 transition-colors"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
 
-            <div className="space-y-3">
+            <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
               <div>
-                <label className="text-sm font-medium text-amber-800 block mb-1">
+                <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
                   顧客說的話 *
                 </label>
                 <textarea
@@ -243,12 +270,12 @@ export default function ExamplesPage() {
                   }
                   placeholder="例如：可以換口味嗎？"
                   rows={2}
-                  className="w-full border border-amber-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                  className="w-full border border-stone-200 rounded-xl p-3 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-amber-800 block mb-1">
+                <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
                   機器人應該怎麼回 *
                 </label>
                 <textarea
@@ -261,12 +288,12 @@ export default function ExamplesPage() {
                   }
                   placeholder="例如：客製化需求幫你轉接闆娘～"
                   rows={3}
-                  className="w-full border border-amber-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                  className="w-full border border-stone-200 rounded-xl p-3 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-amber-800 block mb-1">
+                <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
                   備註（選填）
                 </label>
                 <input
@@ -279,15 +306,15 @@ export default function ExamplesPage() {
                     }))
                   }
                   placeholder="提醒自己為什麼加這個範例"
-                  className="w-full border border-amber-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  className="w-full border border-stone-200 rounded-xl p-3 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors"
                 />
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="px-4 py-4 border-t border-stone-100 flex gap-3">
               <button
                 onClick={closeModal}
-                className="flex-1 py-3 border border-amber-200 rounded-xl text-amber-700 font-medium hover:bg-amber-50"
+                className="flex-1 py-2.5 border border-stone-200 rounded-xl text-[14px] text-stone-600 font-medium hover:bg-stone-50 transition-colors"
               >
                 取消
               </button>
@@ -298,7 +325,7 @@ export default function ExamplesPage() {
                   !modal.editing.customerMessage?.trim() ||
                   !modal.editing.correctResponse?.trim()
                 }
-                className="flex-1 py-3 bg-amber-800 text-white rounded-xl font-medium hover:bg-amber-900 disabled:opacity-50"
+                className="flex-1 py-2.5 bg-amber-800 text-white rounded-xl text-[14px] font-medium hover:bg-amber-900 disabled:opacity-60 transition-colors"
               >
                 {saving ? "儲存中..." : "儲存"}
               </button>
