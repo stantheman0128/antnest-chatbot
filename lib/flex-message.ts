@@ -64,7 +64,7 @@ function buildBubble(product: ProductCard): FlexBubble {
 
   return {
     type: "bubble",
-    size: "kilo",
+    size: "mega",
     hero: {
       type: "box",
       layout: "vertical",
