@@ -63,17 +63,23 @@ interface ScrapedProduct {
   titleForBadge: string;
 }
 
-/** Scrape a single product page, extract JSON-LD + large image */
+/** Scrape a single product: JSON-LD for metadata, JSON API for image */
 async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
   try {
-    const res = await fetch(`${CYBERBIZ_BASE}/products/${handle}`, {
-      headers: { "User-Agent": UA },
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
+    const [htmlRes, jsonRes] = await Promise.all([
+      fetch(`${CYBERBIZ_BASE}/products/${handle}`, {
+        headers: { "User-Agent": UA },
+        next: { revalidate: 0 },
+      }),
+      fetch(`${CYBERBIZ_BASE}/products/${handle}.json`, {
+        headers: { "User-Agent": UA },
+        next: { revalidate: 0 },
+      }),
+    ]);
+    if (!htmlRes.ok) return null;
+    const html = await htmlRes.text();
 
-    // Extract JSON-LD
+    // Extract JSON-LD for metadata
     const ldMatch = html.match(
       /<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/
     );
@@ -88,13 +94,23 @@ async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
 
     if (ld["@type"] !== "Product") return null;
 
-    // Extract cdn-next large image (2048x2048) from page HTML
-    const imgMatch = html.match(
-      /https:\/\/cdn-next\.cybassets\.com\/media\/[^"'\s]+2048x2048[^"'\s]*/
-    );
-    const imageUrl = imgMatch
-      ? imgMatch[0]
-      : (ld.image || "");
+    // Image: JSON API photo_urls (grande=600×600 is optimal for LINE cards)
+    let imageUrl = "";
+    if (jsonRes.ok) {
+      try {
+        const jsonData = await jsonRes.json();
+        const photo = jsonData?.photo_urls?.[0];
+        if (photo?.grande)   imageUrl = `https:${photo.grande}`;
+        else if (photo?.original) imageUrl = `https:${photo.original}`;
+        else if (photo?.maximum)  imageUrl = `https:${photo.maximum}`;
+      } catch { /* fall through */ }
+    }
+    // Fallback to og:image if JSON API unavailable
+    if (!imageUrl) {
+      const ogMatch = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/)
+                   || html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/);
+      imageUrl = ogMatch?.[1] ?? (ld.image || "");
+    }
 
     const price = ld.offers?.price
       ? `NT$${Math.round(parseFloat(ld.offers.price))}`
@@ -103,7 +119,7 @@ async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
     return {
       name: ld.name || handle,
       price,
-      originalPrice: null, // JSON-LD doesn't expose compare-at price
+      originalPrice: null,
       description: (ld.description || "").slice(0, 120),
       imageUrl,
       storeUrl: ld.offers?.url || `${CYBERBIZ_BASE}/products/${handle}`,
