@@ -15,7 +15,10 @@ import {
   createReservation,
   getLatestReservationByUser,
   updateReservationStatus,
+  updateReservationNote,
   getConfig,
+  setConfig,
+  deleteConfig,
 } from "@/lib/data-service";
 
 // Extend Vercel function timeout (free plan: max 60s)
@@ -178,12 +181,26 @@ async function handleExactTimeSelected(
     ? `${new Date(avail.availableDate + "T00:00:00").getMonth() + 1}/${new Date(avail.availableDate + "T00:00:00").getDate()}`
     : "";
 
-  const msg: TextMessage = {
+  // Save pending note state
+  await setConfig(`pending_note:${userId}`, reservation.id);
+
+  const confirmMsg: TextMessage = {
     type: "text",
     text: `預約成功！\n\n📅 ${dateLabel}\n⏰ ${pickupTime.slice(0, 5)}\n\n如需修改請說「修改預約」😊`,
-    quickReply: getPausedQuickReply(),
   };
-  await sendMessages(replyToken, userId, [msg]);
+  const notePrompt: TextMessage = {
+    type: "text",
+    text: "要加備註嗎？如果可以的話附上訂單編號，老闆娘找訂單會比較方便喔！\n\n不需要的話按「跳過」就好～",
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: { type: "postback", label: "跳過", data: "SKIP_NOTE", displayText: "跳過" },
+        },
+      ],
+    },
+  };
+  await sendMessages(replyToken, userId, [confirmMsg, notePrompt]);
   touchBotActivity(userId);
 }
 
@@ -231,12 +248,26 @@ async function handleFlexiblePeriodSelected(
     : "";
   const periodLabel = periodInfo?.label || "時間待定";
 
-  const msg: TextMessage = {
+  // Save pending note state
+  await setConfig(`pending_note:${userId}`, reservation.id);
+
+  const confirmMsg: TextMessage = {
     type: "text",
     text: `預約成功！\n\n📅 ${dateLabel}\n🕐 ${periodLabel}\n\n如需修改請說「修改預約」😊`,
-    quickReply: getPausedQuickReply(),
   };
-  await sendMessages(replyToken, userId, [msg]);
+  const notePrompt: TextMessage = {
+    type: "text",
+    text: "要加備註嗎？如果可以的話附上訂單編號，老闆娘找訂單會比較方便喔！\n\n不需要的話按「跳過」就好～",
+    quickReply: {
+      items: [
+        {
+          type: "action",
+          action: { type: "postback", label: "跳過", data: "SKIP_NOTE", displayText: "跳過" },
+        },
+      ],
+    },
+  };
+  await sendMessages(replyToken, userId, [confirmMsg, notePrompt]);
   touchBotActivity(userId);
 }
 
@@ -275,6 +306,22 @@ async function handleTextMessage(
     await sendMessages(event.replyToken, userId, [msg]);
     console.log("LINE: Bot resumed for user", userId);
     return;
+  }
+
+  // Pending note: if user just made a reservation and types text, save as note
+  if (userId) {
+    const pendingResId = await getConfig(`pending_note:${userId}`);
+    if (pendingResId) {
+      await updateReservationNote(pendingResId, userMessage);
+      await deleteConfig(`pending_note:${userId}`);
+      const msg: TextMessage = {
+        type: "text",
+        text: "已加入備註！",
+        quickReply: getPausedQuickReply(),
+      };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
   }
 
   // 預約取貨關鍵字 → bypass AI, show date carousel directly
@@ -458,6 +505,18 @@ async function handlePostback(
     await sendPickupDateCarousel(event.replyToken, userId);
     if (userId) touchBotActivity(userId);
     console.log("LINE: Customer rebooking after cancelling", id);
+    return;
+  }
+
+  // Customer skips note after reservation
+  if (data === "SKIP_NOTE" && userId) {
+    await deleteConfig(`pending_note:${userId}`);
+    const msg: TextMessage = {
+      type: "text",
+      text: "好的！",
+      quickReply: getPausedQuickReply(),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
     return;
   }
 

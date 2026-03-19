@@ -208,6 +208,15 @@ export async function setConfig(key: string, value: string): Promise<boolean> {
   return true;
 }
 
+export async function deleteConfig(key: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const { error } = await sb.from("system_config").delete().eq("key", key);
+  if (error) { console.error("Supabase delete config error:", error); return false; }
+  configCache = null;
+  return true;
+}
+
 export async function getAllConfigs(): Promise<SystemConfig[]> {
   const sb = getSupabase();
   if (sb) {
@@ -592,6 +601,14 @@ export async function updateReservationStatus(
   if (!sb) return false;
   const { error } = await sb.from("reservations").update({ status }).eq("id", id);
   if (error) { console.error("reservation update error:", error); return false; }
+  return true;
+}
+
+export async function updateReservationNote(id: string, note: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const { error } = await sb.from("reservations").update({ note }).eq("id", id);
+  if (error) { console.error("reservation note update error:", error); return false; }
   return true;
 }
 
