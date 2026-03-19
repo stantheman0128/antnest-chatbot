@@ -7,23 +7,16 @@ import {
 } from "@line/bot-sdk";
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
 import { buildProductCarousel } from "@/lib/flex-message";
-import { buildPickupDateCarousel, buildCustomerReservationFlex } from "@/lib/pickup-flex";
+import { buildPickupDateCarousel, buildCustomerReservationFlex, buildTimeTypeChooser, PERIOD_INFO } from "@/lib/pickup-flex";
 import { getQuickReply, getPausedQuickReply } from "@/lib/quick-replies";
 import {
   getAvailableDates,
   getAvailabilityById,
   createReservation,
   getLatestReservationByUser,
-  confirmReservation,
-  rejectReservation,
   updateReservationStatus,
+  getConfig,
 } from "@/lib/data-service";
-import {
-  notifyOwnerNewReservation,
-  notifyCustomerConfirmed,
-  notifyCustomerRejected,
-  notifyOwnerCancelledByCustomer,
-} from "@/lib/notify";
 
 // Extend Vercel function timeout (free plan: max 60s)
 export const maxDuration = 30;
@@ -84,29 +77,12 @@ function getLineClient() {
   });
 }
 
-async function pushMessages(userId: string, messages: Message | Message[]) {
-  await getLineClient().pushMessage(userId, messages as Message[]);
-}
-
 async function sendMessages(
   replyToken: string,
   userId: string | undefined,
   messages: Message[]
 ) {
-  try {
-    await getLineClient().replyMessage(replyToken, messages);
-  } catch (error: any) {
-    if (userId && error?.statusCode === 400) {
-      console.log("replyToken expired, falling back to push message");
-      try {
-        await pushMessages(userId, messages);
-      } catch (pushError: any) {
-        console.error("Push message failed:", pushError?.statusCode || pushError);
-      }
-    } else {
-      throw error;
-    }
-  }
+  await getLineClient().replyMessage(replyToken, messages);
 }
 
 async function getLineProfile(userId: string): Promise<{ displayName: string } | null> {
@@ -121,7 +97,7 @@ async function getLineProfile(userId: string): Promise<{ displayName: string } |
   }
 }
 
-/** Send pickup date carousel (Flex Message with DateTimePicker buttons) */
+/** Send pickup date carousel */
 async function sendPickupDateCarousel(replyToken: string, userId: string | undefined) {
   const availabilities = await getAvailableDates();
 
@@ -140,21 +116,36 @@ async function sendPickupDateCarousel(replyToken: string, userId: string | undef
 
   const intro: TextMessage = {
     type: "text",
-    text: "以下是可取貨的日期，請選擇並選好取貨時間 📅",
+    text: "以下是可取貨的日期，請選擇 📅",
   };
 
   await sendMessages(replyToken, userId, [intro, carousel as Message]);
 }
 
-/** Handle postback from DateTimePicker: PICK_TIME:{availabilityId} */
-async function handlePickupTimeSelected(
+/** Handle SELECT_DATE postback — show time type chooser */
+async function handleDateSelected(
   replyToken: string,
   userId: string,
-  data: string,
+  availabilityId: string
+) {
+  const avail = await getAvailabilityById(availabilityId);
+  if (!avail) {
+    const msg: TextMessage = { type: "text", text: "此日期已失效，請重新選擇 😅" };
+    await sendMessages(replyToken, userId, [msg]);
+    return;
+  }
+
+  const chooser = buildTimeTypeChooser(avail);
+  await sendMessages(replyToken, userId, [chooser as Message]);
+}
+
+/** Handle PICK_TIME_EXACT postback — exact time booking */
+async function handleExactTimeSelected(
+  replyToken: string,
+  userId: string,
+  availabilityId: string,
   pickupTime: string
 ) {
-  const availabilityId = data.replace("PICK_TIME:", "").trim();
-
   const avail = await getAvailabilityById(availabilityId);
   if (!avail || avail.currentBookings >= avail.maxBookings) {
     const msg: TextMessage = {
@@ -174,6 +165,7 @@ async function handlePickupTimeSelected(
     lineUserId: userId,
     displayName,
     pickupTime,
+    bookingType: "exact",
   });
 
   if (!reservation) {
@@ -182,20 +174,70 @@ async function handlePickupTimeSelected(
     return;
   }
 
-  // Customer gets "pending" confirmation
-  const pendingMsg: TextMessage = {
-    type: "text",
-    text: "⏳ 預約申請送出！\n\n板娘確認後會在這裡通知你 😊\n\n如需修改請說「修改預約」",
-    quickReply: getQuickReply(false),
-  };
-  await sendMessages(replyToken, userId, [pendingMsg]);
-  touchBotActivity(userId);
+  const dateLabel = avail.availableDate
+    ? `${new Date(avail.availableDate + "T00:00:00").getMonth() + 1}/${new Date(avail.availableDate + "T00:00:00").getDate()}`
+    : "";
 
-  // Notify owner with Flex + action buttons
-  notifyOwnerNewReservation({
-    ...reservation,
-    availableDate: avail.availableDate,
-  }).catch(console.error);
+  const msg: TextMessage = {
+    type: "text",
+    text: `預約成功！\n\n📅 ${dateLabel}\n⏰ ${pickupTime.slice(0, 5)}\n\n如需修改請說「修改預約」😊`,
+    quickReply: getPausedQuickReply(),
+  };
+  await sendMessages(replyToken, userId, [msg]);
+  touchBotActivity(userId);
+}
+
+/** Handle PICK_PERIOD postback — flexible time booking */
+async function handleFlexiblePeriodSelected(
+  replyToken: string,
+  userId: string,
+  availabilityId: string,
+  period: string
+) {
+  const avail = await getAvailabilityById(availabilityId);
+  if (!avail || avail.currentBookings >= avail.maxBookings) {
+    const msg: TextMessage = {
+      type: "text",
+      text: "抱歉，這個日期剛好預約滿了！請重新選擇 😅",
+      quickReply: getQuickReply(false),
+    };
+    await sendMessages(replyToken, userId, [msg]);
+    return;
+  }
+
+  const profile = await getLineProfile(userId);
+  const displayName = profile?.displayName || "LINE用戶";
+
+  const periodInfo = PERIOD_INFO[period];
+  const pickupTime = periodInfo?.start || "00:00";
+
+  const reservation = await createReservation({
+    availabilityId,
+    lineUserId: userId,
+    displayName,
+    pickupTime,
+    bookingType: "flexible",
+    flexiblePeriod: period,
+  });
+
+  if (!reservation) {
+    const msg: TextMessage = { type: "text", text: "預約失敗，請稍後再試" };
+    await sendMessages(replyToken, userId, [msg]);
+    return;
+  }
+
+  const dateLabel = avail.availableDate
+    ? `${new Date(avail.availableDate + "T00:00:00").getMonth() + 1}/${new Date(avail.availableDate + "T00:00:00").getDate()}`
+    : "";
+  const periodLabel = periodInfo?.label || "時間待定";
+
+  const msg: TextMessage = {
+    type: "text",
+    text: `預約成功！\n\n📅 ${dateLabel}\n🕐 ${periodLabel}\n\n如需修改請說「修改預約」😊`,
+    quickReply: getPausedQuickReply(),
+  };
+  await sendMessages(replyToken, userId, [msg]);
+  touchBotActivity(userId);
 }
 
 async function handleTextMessage(
@@ -274,6 +316,21 @@ async function handleTextMessage(
     return;
   }
 
+  // 下次開單 → reply with configured announcement
+  if (
+    userMessage.includes("下次開單") ||
+    userMessage.includes("開單時間")
+  ) {
+    const announcement = await getConfig("next_order_announcement");
+    const msg: TextMessage = {
+      type: "text",
+      text: announcement || "目前還沒有下次開單的資訊喔～\n請追蹤我們的官方帳號以獲取最新消息 😊",
+      quickReply: getPausedQuickReply(),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    return;
+  }
+
   // "我的ID" → reply with LINE User ID
   if (userMessage.trim() === "我的ID" || userMessage.trim() === "我的id") {
     const msg: TextMessage = {
@@ -348,60 +405,41 @@ async function handlePostback(
   const data = event.postback.data;
   const time = event.postback.params?.time;
 
-  // Customer selects time from DateTimePicker
+  // Customer selects a date → show time type chooser
+  if (data.startsWith("SELECT_DATE:") && userId) {
+    const availabilityId = data.replace("SELECT_DATE:", "").trim();
+    await handleDateSelected(event.replyToken, userId, availabilityId);
+    return;
+  }
+
+  // Customer selects exact time via DateTimePicker
+  if (data.startsWith("PICK_TIME_EXACT:") && userId && time) {
+    const availabilityId = data.replace("PICK_TIME_EXACT:", "").trim();
+    await handleExactTimeSelected(event.replyToken, userId, availabilityId, time);
+    return;
+  }
+
+  // Customer selects a flexible period
+  if (data.startsWith("PICK_PERIOD:") && userId) {
+    const parts = data.replace("PICK_PERIOD:", "").split(":");
+    const availabilityId = parts[0]?.trim();
+    const period = parts[1]?.trim();
+    if (availabilityId && period) {
+      await handleFlexiblePeriodSelected(event.replyToken, userId, availabilityId, period);
+    }
+    return;
+  }
+
+  // Legacy: old PICK_TIME postback (from old Flex messages still in chat history)
   if (data.startsWith("PICK_TIME:") && userId && time) {
-    await handlePickupTimeSelected(event.replyToken, userId, data, time);
-    return;
-  }
-
-  // Owner confirms reservation
-  if (data.startsWith("CONFIRM_RES:")) {
-    const id = data.replace("CONFIRM_RES:", "").trim();
-    const reservation = await confirmReservation(id);
-    if (!reservation) {
-      // Already confirmed or cancelled
-      const msg: TextMessage = { type: "text", text: "這筆預約已處理過了 🙂" };
-      await sendMessages(event.replyToken, userId, [msg]);
-      return;
-    }
-    const msg: TextMessage = {
-      type: "text",
-      text: `✅ 已確認 ${reservation.displayName} 的預約！`,
-    };
-    await sendMessages(event.replyToken, userId, [msg]);
-    if (reservation.lineUserId) {
-      notifyCustomerConfirmed(reservation.lineUserId, reservation).catch(console.error);
-    }
-    console.log("LINE: Owner confirmed reservation", id);
-    return;
-  }
-
-  // Owner rejects reservation
-  if (data.startsWith("REJECT_RES:")) {
-    const id = data.replace("REJECT_RES:", "").trim();
-    const reservation = await rejectReservation(id);
-    if (!reservation) {
-      const msg: TextMessage = { type: "text", text: "這筆預約已處理過了 🙂" };
-      await sendMessages(event.replyToken, userId, [msg]);
-      return;
-    }
-    const msg: TextMessage = {
-      type: "text",
-      text: `❌ 已拒絕 ${reservation.displayName} 的預約`,
-    };
-    await sendMessages(event.replyToken, userId, [msg]);
-    if (reservation.lineUserId) {
-      notifyCustomerRejected(reservation.lineUserId).catch(console.error);
-    }
-    console.log("LINE: Owner rejected reservation", id);
+    const availabilityId = data.replace("PICK_TIME:", "").trim();
+    await handleExactTimeSelected(event.replyToken, userId, availabilityId, time);
     return;
   }
 
   // Customer cancels reservation
   if (data.startsWith("CANCEL_MY_RES:") && userId) {
     const id = data.replace("CANCEL_MY_RES:", "").trim();
-    // Fetch before cancelling for notification
-    const reservation = await getLatestReservationByUser(userId);
     await updateReservationStatus(id, "cancelled");
     const msg: TextMessage = {
       type: "text",
@@ -409,9 +447,6 @@ async function handlePostback(
       quickReply: getPausedQuickReply(),
     };
     await sendMessages(event.replyToken, userId, [msg]);
-    if (reservation) {
-      notifyOwnerCancelledByCustomer(reservation).catch(console.error);
-    }
     console.log("LINE: Customer cancelled reservation", id);
     return;
   }
@@ -423,6 +458,13 @@ async function handlePostback(
     await sendPickupDateCarousel(event.replyToken, userId);
     if (userId) touchBotActivity(userId);
     console.log("LINE: Customer rebooking after cancelling", id);
+    return;
+  }
+
+  // Legacy: old CONFIRM_RES/REJECT_RES from chat history
+  if (data.startsWith("CONFIRM_RES:") || data.startsWith("REJECT_RES:")) {
+    const msg: TextMessage = { type: "text", text: "此功能已更新，請至後台管理預約 🙂" };
+    await sendMessages(event.replyToken, userId, [msg]);
     return;
   }
 

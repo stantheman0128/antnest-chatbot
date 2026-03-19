@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createReservation, getAvailabilityById } from "@/lib/data-service";
-import { notifyOwnerNewReservation } from "@/lib/notify";
 
 export async function POST(req: NextRequest) {
-  const { availabilityId, lineUserId, displayName, pickupTime, orderNumber, note } =
+  const { availabilityId, lineUserId, displayName, pickupTime, orderNumber, note, bookingType, flexiblePeriod } =
     await req.json();
 
   if (!availabilityId || !displayName?.trim() || !pickupTime) {
@@ -27,16 +26,13 @@ export async function POST(req: NextRequest) {
     pickupTime,
     orderNumber: orderNumber?.trim() || undefined,
     note: note?.trim() || undefined,
+    bookingType: bookingType || "exact",
+    flexiblePeriod: flexiblePeriod || undefined,
   });
 
   if (!reservation) {
     return NextResponse.json({ error: "Failed to create reservation" }, { status: 500 });
   }
-
-  notifyOwnerNewReservation({
-    ...reservation,
-    availableDate: avail.availableDate,
-  }).catch(console.error);
 
   return NextResponse.json(reservation, { status: 201 });
 }

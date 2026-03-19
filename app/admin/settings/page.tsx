@@ -13,6 +13,11 @@ const AUTO_SYNC_KEY = "auto_sync_enabled";
 
 const CONFIG_SECTIONS: Omit<ConfigItem, "value">[] = [
   {
+    key: "next_order_announcement",
+    label: "下次開單時間公告",
+    description: "顧客問「下次開單」時的回覆內容",
+  },
+  {
     key: "identity",
     label: "身份設定",
     description: "小螞蟻的角色定義與自我介紹時機",
