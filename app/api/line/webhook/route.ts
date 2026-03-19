@@ -13,6 +13,7 @@ import {
   getAvailableDates,
   getAvailabilityById,
   createReservation,
+  getReservationById,
   getLatestReservationByUser,
   updateReservationStatus,
   updateReservationNote,
@@ -29,38 +30,33 @@ const recentEvents = new Map<string, number>();
 const DEDUP_TTL = 30_000; // 30 seconds
 
 // Opt-in: bot is silent by default, activated by "呼叫小螞蟻"
-interface ActiveState {
-  activatedAt: number;
-  lastBotActivity: number;
-}
-const activeUsers = new Map<string, ActiveState>();
+// State persisted in Supabase system_config as `active_until:{userId}` = expiry timestamp
 const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 min without bot response → auto-deactivate
 
-function isUserActive(userId: string): boolean {
-  const state = activeUsers.get(userId);
-  if (!state) return false;
-  if (Date.now() - state.lastBotActivity > IDLE_TIMEOUT) {
-    activeUsers.delete(userId);
+async function isUserActive(userId: string): Promise<boolean> {
+  const expiresAt = await getConfig(`active_until:${userId}`);
+  if (!expiresAt) return false;
+  if (Date.now() > parseInt(expiresAt)) {
+    // Expired — clean up async (fire-and-forget)
+    deleteConfig(`active_until:${userId}`);
     return false;
   }
   return true;
 }
 
-function activateUser(userId: string) {
-  const now = Date.now();
-  activeUsers.set(userId, { activatedAt: now, lastBotActivity: now });
+async function activateUser(userId: string) {
+  const expiresAt = (Date.now() + IDLE_TIMEOUT).toString();
+  await setConfig(`active_until:${userId}`, expiresAt);
 }
 
-function deactivateUser(userId: string) {
-  activeUsers.delete(userId);
+async function deactivateUser(userId: string) {
+  await deleteConfig(`active_until:${userId}`);
 }
 
 /** Extend idle timeout — called after bot sends a message */
-function touchBotActivity(userId: string) {
-  const state = activeUsers.get(userId);
-  if (state) {
-    state.lastBotActivity = Date.now();
-  }
+async function touchBotActivity(userId: string) {
+  const expiresAt = (Date.now() + IDLE_TIMEOUT).toString();
+  await setConfig(`active_until:${userId}`, expiresAt);
 }
 
 function isDuplicate(eventId: string): boolean {
@@ -201,7 +197,7 @@ async function handleExactTimeSelected(
     },
   };
   await sendMessages(replyToken, userId, [confirmMsg, notePrompt]);
-  touchBotActivity(userId);
+  await touchBotActivity(userId);
 }
 
 /** Handle PICK_PERIOD postback — flexible time booking */
@@ -268,7 +264,7 @@ async function handleFlexiblePeriodSelected(
     },
   };
   await sendMessages(replyToken, userId, [confirmMsg, notePrompt]);
-  touchBotActivity(userId);
+  await touchBotActivity(userId);
 }
 
 async function handleTextMessage(
@@ -284,7 +280,10 @@ async function handleTextMessage(
 
   // "呼叫闆娘" → deactivate bot, hand off to human
   if (userMessage.includes("呼叫闆娘")) {
-    if (userId) deactivateUser(userId);
+    if (userId) {
+      await deactivateUser(userId);
+      await deleteConfig(`pending_note:${userId}`);
+    }
     const msg: TextMessage = {
       type: "text",
       text: "好的，已為你轉接闆娘本人～\n她會盡快回覆你喔！請稍等一下 😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
@@ -297,7 +296,7 @@ async function handleTextMessage(
 
   // "呼叫小螞蟻" → activate bot
   if (userMessage.includes("呼叫小螞蟻") || userMessage.includes("呼叫客服")) {
-    if (userId) activateUser(userId);
+    if (userId) await activateUser(userId);
     const msg: TextMessage = {
       type: "text",
       text: "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
@@ -332,9 +331,9 @@ async function handleTextMessage(
     userMessage.includes("約取貨") ||
     userMessage.includes("我要約取貨")
   ) {
-    if (userId) activateUser(userId);
+    if (userId) await activateUser(userId);
     await sendPickupDateCarousel(event.replyToken, userId);
-    if (userId) touchBotActivity(userId);
+    if (userId) await touchBotActivity(userId);
     console.log("LINE: Pickup carousel triggered by keyword:", userMessage);
     return;
   }
@@ -389,7 +388,7 @@ async function handleTextMessage(
   }
 
   // Bot is opt-in — only respond if user has activated it
-  if (!userId || !isUserActive(userId)) {
+  if (!userId || !(await isUserActive(userId))) {
     console.log("LINE: Bot inactive for user, skipping:", userId);
     return;
   }
@@ -407,7 +406,7 @@ async function handleTextMessage(
       text: aiResponse.text || "這個問題幫你轉接闆娘～她會盡快回覆你喔！😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
       quickReply: getPausedQuickReply(),
     };
-    if (userId) deactivateUser(userId);
+    if (userId) await deactivateUser(userId);
     await sendMessages(event.replyToken, userId, [msg]);
     console.log("LINE: AI escalated to human, reason:", aiResponse.escalateReason);
     return;
@@ -438,7 +437,7 @@ async function handleTextMessage(
   }
 
   await sendMessages(event.replyToken, userId, messages);
-  if (userId) touchBotActivity(userId);
+  if (userId) await touchBotActivity(userId);
 }
 
 async function handlePostback(
@@ -484,9 +483,20 @@ async function handlePostback(
     return;
   }
 
-  // Customer cancels reservation
+  // Customer cancels reservation (with ownership check)
   if (data.startsWith("CANCEL_MY_RES:") && userId) {
     const id = data.replace("CANCEL_MY_RES:", "").trim();
+    const reservation = await getReservationById(id);
+    if (!reservation || reservation.lineUserId !== userId) {
+      const msg: TextMessage = { type: "text", text: "無法取消此預約 😅" };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
+    if (reservation.status === "cancelled") {
+      const msg: TextMessage = { type: "text", text: "此預約已取消囉", quickReply: getPausedQuickReply() };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
     await updateReservationStatus(id, "cancelled");
     const msg: TextMessage = {
       type: "text",
@@ -498,12 +508,18 @@ async function handlePostback(
     return;
   }
 
-  // Customer wants to rebook (modify = cancel + rebook)
+  // Customer wants to rebook (modify = cancel + rebook, with ownership check)
   if (data.startsWith("REBOOK:") && userId) {
     const id = data.replace("REBOOK:", "").trim();
+    const reservation = await getReservationById(id);
+    if (!reservation || reservation.lineUserId !== userId) {
+      const msg: TextMessage = { type: "text", text: "無法修改此預約 😅" };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
     await updateReservationStatus(id, "cancelled");
     await sendPickupDateCarousel(event.replyToken, userId);
-    if (userId) touchBotActivity(userId);
+    await touchBotActivity(userId);
     console.log("LINE: Customer rebooking after cancelling", id);
     return;
   }

@@ -612,6 +612,18 @@ export async function updateReservationNote(id: string, note: string): Promise<b
   return true;
 }
 
+export async function getReservationById(id: string): Promise<Reservation | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("reservations")
+    .select("*, pickup_availability(available_date)")
+    .eq("id", id)
+    .single();
+  if (error || !data) return null;
+  return { ...mapDbReservation(data), availableDate: data.pickup_availability?.available_date };
+}
+
 /** Returns most recent pending/confirmed reservation for a LINE user (for cancel/modify flow). */
 export async function getLatestReservationByUser(lineUserId: string): Promise<Reservation | null> {
   const sb = getSupabase();
