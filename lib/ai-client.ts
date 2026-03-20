@@ -7,9 +7,14 @@ interface MessageHistory {
   content: string;
 }
 
+export interface ProductSpec {
+  id: string;
+  variantName?: string;
+}
+
 export interface AIResponse {
   text: string;
-  productIds: string[];
+  productSpecs: ProductSpec[];
   escalate: boolean;
   escalateReason: string;
   skip: boolean;
@@ -46,6 +51,11 @@ async function getProductCardInstruction(): Promise<{
 當你的回覆中提到具體商品時，請在回覆的最後一行加上：
 SHOW_PRODUCTS: product-id-1, product-id-2
 
+如果顧客問特定口味，可以指定口味名稱（會顯示該口味的專屬照片）：
+SHOW_PRODUCTS: product-id/口味名稱
+
+例如：SHOW_PRODUCTS: classic-tiramisu/威士忌咖啡酒香
+
 可用的 product ID：
 ${idList}
 
@@ -54,6 +64,7 @@ ${idList}
 • 一般閒聊、運費、付款等問題不需要加
 • 最多顯示 5 個商品
 • 如果顧客問「有什麼甜點」或「全部品項」，顯示全部
+• 顧客問特定口味時用 product-id/口味名稱 格式
 • SHOW_PRODUCTS 這行不會顯示給顧客看，系統會自動移除並轉換成商品卡片
 </product_cards>
 
@@ -136,12 +147,11 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
 
   // SKIP signal — AI decided not to respond
   if (trimmedRaw === "SKIP" || trimmedRaw.startsWith("SKIP:") || trimmedRaw.startsWith("SKIP\n")) {
-    return { text: "", productIds: [], escalate: false, escalateReason: "", skip: true, showPickupLink: false };
+    return { text: "", productSpecs: [], escalate: false, escalateReason: "", skip: true, showPickupLink: false };
   }
 
-
   const lines = raw.split("\n");
-  const productIds: string[] = [];
+  const productSpecs: ProductSpec[] = [];
   const textLines: string[] = [];
   let escalate = false;
   let escalateReason = "";
@@ -150,12 +160,24 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith("SHOW_PRODUCTS:")) {
-      const ids = trimmed
+      const entries = trimmed
         .replace("SHOW_PRODUCTS:", "")
         .split(",")
-        .map((id) => id.trim())
-        .filter((id) => validIds.includes(id));
-      productIds.push(...ids);
+        .map((e) => e.trim())
+        .filter(Boolean);
+      for (const entry of entries) {
+        // Support "product-id/variant-name" format
+        const slashIdx = entry.indexOf("/");
+        if (slashIdx > 0) {
+          const id = entry.slice(0, slashIdx);
+          const variantName = entry.slice(slashIdx + 1);
+          if (validIds.includes(id)) {
+            productSpecs.push({ id, variantName });
+          }
+        } else if (validIds.includes(entry)) {
+          productSpecs.push({ id: entry });
+        }
+      }
     } else if (trimmed.startsWith("ESCALATE:")) {
       escalate = true;
       escalateReason = trimmed.replace("ESCALATE:", "").trim();
@@ -173,7 +195,7 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
 
   return {
     text: stripMarkdown(textLines.join("\n")),
-    productIds,
+    productSpecs,
     escalate,
     escalateReason,
     skip: false,
@@ -266,7 +288,7 @@ async function callGemini(
 
 const FALLBACK: AIResponse = {
   text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
-  productIds: [],
+  productSpecs: [],
   escalate: false,
   escalateReason: "",
   skip: false,
@@ -288,7 +310,7 @@ export async function generateAIResponse(
       if (!textContent) {
         return {
           text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
-          productIds: [],
+          productSpecs: [],
           escalate: false,
           escalateReason: "",
           skip: false,

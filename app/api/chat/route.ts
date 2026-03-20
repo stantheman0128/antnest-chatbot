@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const aiResponse = await generateAIResponse(message, history || []);
     return NextResponse.json({
       response: aiResponse.text,
-      productIds: aiResponse.productIds,
+      productIds: aiResponse.productSpecs.map((s) => s.id),
       source: "ai",
     });
   } catch (error) {

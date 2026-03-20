@@ -4,6 +4,15 @@ import { getSupabase } from "./supabase";
 
 // ── Types ──────────────────────────────────────────────
 
+export interface ProductVariant {
+  title: string;
+  option1: string | null;
+  price: number;
+  compareAtPrice: number | null;
+  available: boolean;
+  imageUrl: string | null;
+}
+
 export interface ProductCard {
   id: string;
   name: string;
@@ -18,6 +27,7 @@ export interface ProductCard {
   sortOrder: number;
   temperatureZone: string | null;
   alcoholFree: boolean;
+  variants: ProductVariant[];
 }
 
 export interface SystemConfig {
@@ -129,6 +139,7 @@ export async function upsertProduct(
       sort_order: product.sortOrder ?? 0,
       temperature_zone: product.temperatureZone,
       alcohol_free: product.alcoholFree ?? true,
+      variants: product.variants ?? [],
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" }
@@ -388,11 +399,16 @@ export interface Reservation {
   availableDate?: string;
 }
 
+/** Get today's date in Taiwan timezone (Asia/Taipei) */
+function getTaiwanToday(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
+}
+
 /** Returns future active dates that still have capacity (for LINE booking). */
 export async function getAvailableDates(): Promise<PickupAvailability[]> {
   const sb = getSupabase();
   if (!sb) return [];
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTaiwanToday();
 
   const { data: avails, error } = await sb
     .from("pickup_availability")
@@ -434,7 +450,7 @@ export async function getAvailableDates(): Promise<PickupAvailability[]> {
 export async function getAllAvailabilities(): Promise<PickupAvailability[]> {
   const sb = getSupabase();
   if (!sb) return [];
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTaiwanToday();
 
   const { data: avails, error } = await sb
     .from("pickup_availability")
@@ -541,27 +557,31 @@ export async function createReservation(input: {
   const sb = getSupabase();
   if (!sb) return null;
 
-  // Check capacity
-  const avail = await getAvailabilityById(input.availabilityId);
-  if (!avail || avail.currentBookings >= avail.maxBookings) return null;
+  // Atomic check-and-insert via Postgres function (prevents overbooking race condition)
+  const { data: newId, error: rpcError } = await sb.rpc("create_reservation_atomic", {
+    p_availability_id: input.availabilityId,
+    p_line_user_id: input.lineUserId || null,
+    p_display_name: input.displayName,
+    p_pickup_time: input.pickupTime,
+    p_order_number: input.orderNumber || null,
+    p_note: input.note || null,
+    p_booking_type: input.bookingType || "exact",
+    p_flexible_period: input.flexiblePeriod || null,
+  });
 
+  if (rpcError || !newId) {
+    console.error("reservation atomic insert error:", rpcError);
+    return null;
+  }
+
+  // Fetch the created reservation to return full object
   const { data, error } = await sb
     .from("reservations")
-    .insert({
-      availability_id: input.availabilityId,
-      line_user_id: input.lineUserId || null,
-      display_name: input.displayName,
-      pickup_time: input.pickupTime,
-      order_number: input.orderNumber || null,
-      note: input.note || null,
-      status: "confirmed",
-      booking_type: input.bookingType || "exact",
-      flexible_period: input.flexiblePeriod || null,
-    })
-    .select()
+    .select("*")
+    .eq("id", newId)
     .single();
 
-  if (error) { console.error("reservation insert error:", error); return null; }
+  if (error || !data) return null;
   return mapDbReservation(data);
 }
 
@@ -703,6 +723,7 @@ function getStaticProducts(): ProductCard[] {
       sortOrder: i,
       temperatureZone: null,
       alcoholFree: !p.badges?.some((b: string) => b.includes("酒精")),
+      variants: [],
     }));
   } catch {
     return [];
@@ -753,5 +774,6 @@ function mapDbProduct(row: any): ProductCard {
     sortOrder: row.sort_order || 0,
     temperatureZone: row.temperature_zone || null,
     alcoholFree: row.alcohol_free ?? true,
+    variants: row.variants || [],
   };
 }

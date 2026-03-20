@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllProducts, upsertProduct } from "@/lib/data-service";
+import { getAllProducts, upsertProduct, ProductVariant } from "@/lib/data-service";
 import { verifyAdmin } from "@/lib/admin-auth";
 
 const CYBERBIZ_BASE = "https://antnest.cyberbiz.co";
@@ -61,6 +61,7 @@ interface ScrapedProduct {
   storeUrl: string;
   inStock: boolean;
   titleForBadge: string;
+  variants: ProductVariant[];
 }
 
 /** Scrape a single product: JSON-LD for metadata, JSON API for image */
@@ -94,17 +95,58 @@ async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
 
     if (ld["@type"] !== "Product") return null;
 
-    // Image: JSON API photo_urls (grande=600×600 is optimal for LINE cards)
+    // Parse JSON API for images + variants
     let imageUrl = "";
+    let variants: ProductVariant[] = [];
+    let jsonData: any = null;
+
     if (jsonRes.ok) {
       try {
-        const jsonData = await jsonRes.json();
+        jsonData = await jsonRes.json();
+
+        // Main product image
         const photo = jsonData?.photo_urls?.[0];
         if (photo?.grande)   imageUrl = `https:${photo.grande}`;
         else if (photo?.original) imageUrl = `https:${photo.original}`;
         else if (photo?.maximum)  imageUrl = `https:${photo.maximum}`;
+
+        // Build photo ID → position map for variant photo resolution
+        const photoPositionMap = new Map<number, number>();
+        for (const p of jsonData?.photos || []) {
+          if (p?.photo?.id && p?.photo?.position) {
+            photoPositionMap.set(p.photo.id, p.photo.position);
+          }
+        }
+        const photoUrls: any[] = jsonData?.photo_urls || [];
+
+        // Parse variants
+        const rawVariants: any[] = jsonData?.variants || [];
+        if (rawVariants.length > 1 || (rawVariants.length === 1 && rawVariants[0]?.option1)) {
+          variants = rawVariants.map((v: any) => {
+            // Resolve variant-specific photo
+            let variantImage: string | null = null;
+            if (v.photos?.length > 0) {
+              const photoId = v.photos[0]?.id;
+              const position = photoPositionMap.get(photoId);
+              if (position && position <= photoUrls.length && photoUrls[position - 1]) {
+                const pu = photoUrls[position - 1];
+                variantImage = pu.grande ? `https:${pu.grande}`
+                  : pu.original ? `https:${pu.original}` : null;
+              }
+            }
+            return {
+              title: v.title || v.option1 || "",
+              option1: v.option1 || null,
+              price: v.price || 0,
+              compareAtPrice: v.compare_at_price || null,
+              available: v.available ?? false,
+              imageUrl: variantImage,
+            };
+          });
+        }
       } catch { /* fall through */ }
     }
+
     // Fallback to og:image if JSON API unavailable
     if (!imageUrl) {
       const ogMatch = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/)
@@ -112,9 +154,18 @@ async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
       imageUrl = ogMatch?.[1] ?? (ld.image || "");
     }
 
-    const price = ld.offers?.price
-      ? `NT$${Math.round(parseFloat(ld.offers.price))}`
-      : "";
+    // Price: range if multiple variants with different prices, else single
+    let price = "";
+    if (variants.length > 1) {
+      const prices = variants.map((v) => v.price).filter((p) => p > 0);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      price = min === max ? `NT$${min}` : `NT$${min} ~ NT$${max}`;
+    } else {
+      price = ld.offers?.price
+        ? `NT$${Math.round(parseFloat(ld.offers.price))}`
+        : "";
+    }
 
     return {
       name: ld.name || handle,
@@ -125,6 +176,7 @@ async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
       storeUrl: ld.offers?.url || `${CYBERBIZ_BASE}/products/${handle}`,
       inStock: ld.offers?.availability?.includes("InStock") ?? true,
       titleForBadge: ld.name || "",
+      variants,
     };
   } catch {
     return null;
@@ -169,7 +221,8 @@ export async function POST(req: NextRequest) {
         !existing ||
         existing.price !== scraped.price ||
         existing.imageUrl !== scraped.imageUrl ||
-        !existing.isActive;
+        !existing.isActive ||
+        JSON.stringify(existing.variants) !== JSON.stringify(scraped.variants);
 
       if (!changed) {
         unchanged++;
@@ -190,6 +243,7 @@ export async function POST(req: NextRequest) {
         sortOrder: existing?.sortOrder ?? existingProducts.length + added,
         temperatureZone: existing?.temperatureZone || null,
         alcoholFree: existing?.alcoholFree ?? true,
+        variants: scraped.variants,
       });
 
       if (isNew) added++;

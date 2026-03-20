@@ -1,10 +1,20 @@
 import { FlexBubble, FlexCarousel, FlexMessage } from "@line/bot-sdk";
 import { getActiveProducts, ProductCard } from "./data-service";
+import { ProductSpec } from "./ai-client";
 
 const BRAND_COLOR = "#8B5E3C";
 const GRAY = "#999999";
 
-function buildBubble(product: ProductCard): FlexBubble {
+function buildBubble(product: ProductCard, variantName?: string): FlexBubble {
+  // Resolve image: use variant-specific photo if requested
+  let heroImage = product.imageUrl;
+  if (variantName && product.variants.length > 0) {
+    const match = product.variants.find(
+      (v) => v.title === variantName || v.option1 === variantName
+    );
+    if (match?.imageUrl) heroImage = match.imageUrl;
+  }
+
   // Floating badge overlays on the hero image
   const badgeOverlays: any[] = product.badges.map((badge, i) => ({
     type: "box",
@@ -62,6 +72,19 @@ function buildBubble(product: ProductCard): FlexBubble {
         weight: "bold",
       };
 
+  // Build variant list for description
+  let variantText = "";
+  if (product.variants.length > 1) {
+    const lines = product.variants.map((v) => {
+      const name = v.option1 || v.title;
+      const avail = v.available ? "" : "（已售完）";
+      return `• ${name} NT$${v.price}${avail}`;
+    });
+    variantText = "\n\n口味：\n" + lines.join("\n");
+  }
+
+  const descriptionText = product.description + variantText;
+
   return {
     type: "bubble",
     size: "kilo",
@@ -71,7 +94,7 @@ function buildBubble(product: ProductCard): FlexBubble {
       contents: [
         {
           type: "image",
-          url: product.imageUrl,
+          url: heroImage,
           size: "full",
           aspectRatio: "20:13",
           aspectMode: "cover",
@@ -99,10 +122,10 @@ function buildBubble(product: ProductCard): FlexBubble {
           wrap: true,
           color: "#333333",
         },
-        // Description
+        // Description + variants
         {
           type: "text",
-          text: product.description,
+          text: descriptionText,
           size: "xs",
           color: "#666666",
           wrap: true,
@@ -154,20 +177,20 @@ function buildBubble(product: ProductCard): FlexBubble {
 }
 
 /**
- * Build a Flex Message carousel from product IDs.
- * Now reads from DB via data-service.
+ * Build a Flex Message carousel from product specs.
+ * Supports optional variantName per product for variant-specific photos.
  */
 export async function buildProductCarousel(
-  productIds: string[]
+  specs: ProductSpec[]
 ): Promise<FlexMessage | null> {
   const allProducts = await getActiveProducts();
   const productMap = new Map(allProducts.map((p) => [p.id, p]));
 
   const bubbles: FlexBubble[] = [];
-  for (const id of productIds) {
-    const product = productMap.get(id);
+  for (const spec of specs) {
+    const product = productMap.get(spec.id);
     if (product) {
-      bubbles.push(buildBubble(product));
+      bubbles.push(buildBubble(product, spec.variantName));
     }
   }
 

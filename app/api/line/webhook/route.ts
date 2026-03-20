@@ -4,6 +4,7 @@ import {
   WebhookEvent,
   TextMessage,
   Message,
+  validateSignature,
 } from "@line/bot-sdk";
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
 import { buildProductCarousel } from "@/lib/flex-message";
@@ -70,8 +71,10 @@ function isDuplicate(eventId: string): boolean {
 }
 
 function getLineClient() {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
   return new Client({
-    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
+    channelAccessToken: token,
     channelSecret: process.env.LINE_CHANNEL_SECRET || "",
   });
 }
@@ -96,8 +99,8 @@ async function getLineProfile(userId: string): Promise<{ displayName: string } |
   }
 }
 
-/** Send pickup date carousel */
-async function sendPickupDateCarousel(replyToken: string, userId: string | undefined) {
+/** Build pickup date carousel messages (does not send — caller decides) */
+async function buildPickupMessages(introText?: string): Promise<Message[]> {
   const availabilities = await getAvailableDates();
 
   if (availabilities.length === 0) {
@@ -106,19 +109,26 @@ async function sendPickupDateCarousel(replyToken: string, userId: string | undef
       text: "目前沒有可預約的取貨時段，請稍後再試或直接聯繫闆娘 😊",
       quickReply: getQuickReply(false),
     };
-    await sendMessages(replyToken, userId, [msg]);
-    return;
+    return [msg];
   }
 
   const carousel = buildPickupDateCarousel(availabilities);
-  if (!carousel) return;
+  if (!carousel) return [];
 
   const intro: TextMessage = {
     type: "text",
-    text: "以下是可取貨的日期，請選擇 📅",
+    text: introText || "以下是可取貨的日期，請選擇 📅",
   };
 
-  await sendMessages(replyToken, userId, [intro, carousel as Message]);
+  return [intro, carousel as Message];
+}
+
+/** Send pickup date carousel */
+async function sendPickupDateCarousel(replyToken: string, userId: string | undefined) {
+  const messages = await buildPickupMessages();
+  if (messages.length > 0) {
+    await sendMessages(replyToken, userId, messages);
+  }
 }
 
 /** Handle SELECT_DATE postback — show time type chooser */
@@ -296,7 +306,10 @@ async function handleTextMessage(
 
   // "呼叫小螞蟻" → activate bot
   if (userMessage.includes("呼叫小螞蟻") || userMessage.includes("呼叫客服")) {
-    if (userId) await activateUser(userId);
+    if (userId) {
+      await activateUser(userId);
+      await deleteConfig(`pending_note:${userId}`);
+    }
     const msg: TextMessage = {
       type: "text",
       text: "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
@@ -307,22 +320,6 @@ async function handleTextMessage(
     return;
   }
 
-  // Pending note: if user just made a reservation and types text, save as note
-  if (userId) {
-    const pendingResId = await getConfig(`pending_note:${userId}`);
-    if (pendingResId) {
-      await updateReservationNote(pendingResId, userMessage);
-      await deleteConfig(`pending_note:${userId}`);
-      const msg: TextMessage = {
-        type: "text",
-        text: "已加入備註！",
-        quickReply: getPausedQuickReply(),
-      };
-      await sendMessages(event.replyToken, userId, [msg]);
-      return;
-    }
-  }
-
   // 預約取貨關鍵字 → bypass AI, show date carousel directly
   if (
     userMessage.includes("我要預約取貨") ||
@@ -331,7 +328,10 @@ async function handleTextMessage(
     userMessage.includes("約取貨") ||
     userMessage.includes("我要約取貨")
   ) {
-    if (userId) await activateUser(userId);
+    if (userId) {
+      await activateUser(userId);
+      await deleteConfig(`pending_note:${userId}`);
+    }
     await sendPickupDateCarousel(event.replyToken, userId);
     if (userId) await touchBotActivity(userId);
     console.log("LINE: Pickup carousel triggered by keyword:", userMessage);
@@ -347,6 +347,7 @@ async function handleTextMessage(
       userMessage.includes("查看預約") ||
       userMessage.includes("改預約"))
   ) {
+    await deleteConfig(`pending_note:${userId}`);
     const reservation = await getLatestReservationByUser(userId);
     if (!reservation) {
       const msg: TextMessage = {
@@ -387,6 +388,23 @@ async function handleTextMessage(
     return;
   }
 
+  // Pending note: if user just made a reservation and types text, save as note
+  // Placed AFTER all keyword checks to prevent keywords being saved as notes
+  if (userId) {
+    const pendingResId = await getConfig(`pending_note:${userId}`);
+    if (pendingResId) {
+      await updateReservationNote(pendingResId, userMessage);
+      await deleteConfig(`pending_note:${userId}`);
+      const msg: TextMessage = {
+        type: "text",
+        text: "已加入備註！",
+        quickReply: getPausedQuickReply(),
+      };
+      await sendMessages(event.replyToken, userId, [msg]);
+      return;
+    }
+  }
+
   // Bot is opt-in — only respond if user has activated it
   if (!userId || !(await isUserActive(userId))) {
     console.log("LINE: Bot inactive for user, skipping:", userId);
@@ -413,12 +431,15 @@ async function handleTextMessage(
   }
 
   if (aiResponse.showPickupLink) {
-    await sendPickupDateCarousel(event.replyToken, userId);
+    const pickupMessages = await buildPickupMessages(aiResponse.text || undefined);
+    if (pickupMessages.length > 0) {
+      await sendMessages(event.replyToken, userId, pickupMessages);
+    }
     console.log("LINE: Pickup date carousel sent to user");
     return;
   }
 
-  const hasProducts = aiResponse.productIds.length > 0;
+  const hasProducts = aiResponse.productSpecs.length > 0;
   const maxTextSegments = hasProducts ? 2 : 3;
   const segments = splitResponse(aiResponse.text, maxTextSegments);
 
@@ -432,7 +453,7 @@ async function handleTextMessage(
   const messages: Message[] = [...textMessages];
 
   if (hasProducts) {
-    const carousel = await buildProductCarousel(aiResponse.productIds);
+    const carousel = await buildProductCarousel(aiResponse.productSpecs);
     if (carousel) messages.push(carousel);
   }
 
@@ -550,17 +571,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
     const signature = req.headers.get("x-line-signature");
+    const channelSecret = process.env.LINE_CHANNEL_SECRET || "";
 
-    if (!signature) {
-      try {
-        const parsed = JSON.parse(body);
-        if (!parsed.events) {
-          console.log("No events array, rejecting");
-          return NextResponse.json({ error: "Unknown format" }, { status: 400 });
-        }
-      } catch {
-        return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-      }
+    // Verify LINE signature — reject forged requests
+    if (!signature || !channelSecret || !validateSignature(body, channelSecret, signature)) {
+      console.log("LINE: Invalid or missing signature, rejecting");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
     const events: WebhookEvent[] = JSON.parse(body).events;

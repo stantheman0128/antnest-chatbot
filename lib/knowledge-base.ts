@@ -33,17 +33,34 @@ function assemblePrompt(
 ): string {
   const get = (key: string) => config.get(key) || "";
 
-  // Build <products> section from DB products
+  // Build <products> section from DB products (with variant info)
   const productsXml = products
-    .map(
-      (p) =>
-        `<product id="${p.id}">\n${p.detailedDescription || `名稱：${p.name}\n價格：${p.price}\n特色：${p.description}`}\n</product>`
-    )
+    .map((p) => {
+      if (p.detailedDescription) {
+        return `<product id="${p.id}">\n${p.detailedDescription}\n</product>`;
+      }
+      let body = `名稱：${p.name}\n價格：${p.price}\n特色：${p.description}`;
+      if (p.variants.length > 0) {
+        const variantLines = p.variants.map((v) => {
+          const name = v.option1 || v.title;
+          const avail = v.available ? "" : "（已售完）";
+          return `- ${name} NT$${v.price}${avail}`;
+        });
+        body += `\n口味：\n${variantLines.join("\n")}`;
+      }
+      return `<product id="${p.id}">\n${body}\n</product>`;
+    })
     .join("\n\n");
 
-  // Build price reference from products
+  // Build price reference from products (with variants)
   const priceRef = products
-    .map((p, i) => `${i + 1}. ${p.name} ${p.price}`)
+    .map((p, i) => {
+      if (p.variants.length > 1) {
+        const lines = p.variants.map((v) => `   - ${v.option1 || v.title} NT$${v.price}`);
+        return `${i + 1}. ${p.name}\n${lines.join("\n")}`;
+      }
+      return `${i + 1}. ${p.name} ${p.price}`;
+    })
     .join("\n");
 
   const sections = [
