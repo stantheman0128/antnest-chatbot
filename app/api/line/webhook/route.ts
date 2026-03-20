@@ -424,8 +424,12 @@ async function handleTextMessage(
   const aiResponse = await generateAIResponse(userMessage, []);
 
   if (aiResponse.skip) {
-    console.log("LINE: AI skipped message:", userMessage);
-    return;
+    if (!isDev) {
+      console.log("LINE: AI skipped message:", userMessage);
+      return;
+    }
+    // Dev mode: force a response even when AI wants to skip
+    aiResponse.text = aiResponse.text || "（AI 判定為 SKIP，dev mode 強制回覆）\n請換個方式提問試試～";
   }
 
   if (aiResponse.escalate) {
