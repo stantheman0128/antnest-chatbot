@@ -36,12 +36,13 @@ function assemblePrompt(
   // Build <products> section from DB products (with variant info and stock status)
   const productsXml = products
     .map((p) => {
-      if (p.detailedDescription) {
-        return `<product id="${p.id}">\n${p.detailedDescription}\n</product>`;
-      }
-      // Determine product-level stock status
+      // Determine product-level stock status (applies to ALL products)
       const allSoldOut = p.variants.length > 0 && p.variants.every((v) => !v.available);
       const stockLabel = allSoldOut ? "\n庫存狀態：⚠️ 全品項已售完" : "";
+
+      if (p.detailedDescription) {
+        return `<product id="${p.id}">\n${p.detailedDescription}${stockLabel}\n</product>`;
+      }
 
       let body = `名稱：${p.name}\n價格：${p.price}\n特色：${p.description}${stockLabel}`;
       if (p.variants.length > 0) {
