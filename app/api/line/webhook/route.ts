@@ -7,6 +7,7 @@ import {
   validateSignature,
 } from "@line/bot-sdk";
 import { generateAIResponse, splitResponse } from "@/lib/ai-client";
+import { isStockQuery, refreshStockIfStale } from "@/lib/stock-checker";
 import { buildProductCarousel } from "@/lib/flex-message";
 import { buildPickupDateCarousel, buildCustomerReservationFlex, buildTimeTypeChooser, PERIOD_INFO } from "@/lib/pickup-flex";
 import { getQuickReply, getPausedQuickReply } from "@/lib/quick-replies";
@@ -405,10 +406,19 @@ async function handleTextMessage(
     }
   }
 
-  // Bot is opt-in — only respond if user has activated it
-  if (!userId || !(await isUserActive(userId))) {
+  // Dev bypass: always respond to developer without needing "呼叫小螞蟻"
+  const devIds = (process.env.DEV_LINE_USER_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
+  const isDev = userId ? devIds.includes(userId) : false;
+
+  // Bot is opt-in — only respond if user has activated it (devs bypass)
+  if (!isDev && (!userId || !(await isUserActive(userId)))) {
     console.log("LINE: Bot inactive for user, skipping:", userId);
     return;
+  }
+
+  // Refresh stock from CYBERBIZ if stale and user is asking about availability
+  if (isStockQuery(userMessage)) {
+    await refreshStockIfStale();
   }
 
   const aiResponse = await generateAIResponse(userMessage, []);
