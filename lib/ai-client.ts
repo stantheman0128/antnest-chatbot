@@ -296,7 +296,7 @@ const FALLBACK: AIResponse = {
 };
 
 /**
- * Generate AI response using Google Gemini 2.5 Flash-Lite
+ * Generate AI response using Google Gemini 3.1 Flash-Lite
  * Includes automatic retry on first failure (handles cold start / rate limit)
  */
 export async function generateAIResponse(
@@ -305,7 +305,10 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
+      const startTime = Date.now();
       const { text: textContent, validIds } = await callGemini(message, history);
+      const latencyMs = Date.now() - startTime;
+      console.log(`[AI] model=gemini-3.1-flash-lite-preview latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length} attempt=${attempt + 1}`);
 
       if (!textContent) {
         return {
