@@ -193,7 +193,7 @@ async function handleExactTimeSelected(
 
   const confirmMsg: TextMessage = {
     type: "text",
-    text: `預約成功！\n\n📅 ${dateLabel}\n⏰ ${pickupTime.slice(0, 5)}\n\n如需修改請說「修改預約」😊`,
+    text: `預約成功！\n\n📅 ${dateLabel}\n⏰ ${pickupTime.slice(0, 5)}\n📍 新北市板橋區龍興街69號（浮洲火車站附近）\n\n如需修改請說「修改預約」😊`,
   };
   const notePrompt: TextMessage = {
     type: "text",
@@ -260,7 +260,7 @@ async function handleFlexiblePeriodSelected(
 
   const confirmMsg: TextMessage = {
     type: "text",
-    text: `預約成功！\n\n📅 ${dateLabel}\n🕐 ${periodLabel}\n\n如需修改請說「修改預約」😊`,
+    text: `預約成功！\n\n📅 ${dateLabel}\n🕐 ${periodLabel}\n📍 新北市板橋區龍興街69號（浮洲火車站附近）\n\n如需修改請說「修改預約」😊`,
   };
   const notePrompt: TextMessage = {
     type: "text",
