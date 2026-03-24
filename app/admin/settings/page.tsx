@@ -11,6 +11,39 @@ interface ConfigItem {
 
 const AUTO_SYNC_KEY = "auto_sync_enabled";
 
+const CONFIG_MAX_LENGTHS: Record<string, number> = {
+  greeting: 500,
+  next_order_announcement: 500,
+  mission: 500,
+  rules: 2000,
+  format: 2000,
+  out_of_scope_reply: 500,
+  shipping: 1000,
+  pickup: 1000,
+  payment: 500,
+  refund_policy: 1000,
+  membership: 2000,
+  brand_story: 2000,
+  contact: 500,
+  ordering_process: 1000,
+  reminders: 1000,
+  price_reference: 2000,
+};
+
+const DEFAULT_MAX_LENGTH = 2000;
+
+const SUSPICIOUS_PATTERNS = [
+  /ignore\s+(all\s+)?(previous|above|prior)\s+(instructions?|prompts?|rules?)/gi,
+  /忽略(以上|上面|之前|先前)(的)?(指令|規則|提示|設定)/g,
+];
+
+function hasSuspiciousContent(value: string): boolean {
+  return SUSPICIOUS_PATTERNS.some((p) => {
+    p.lastIndex = 0;
+    return p.test(value);
+  });
+}
+
 const CONFIG_SECTIONS: Omit<ConfigItem, "value">[] = [
   {
     key: "next_order_announcement",
@@ -18,9 +51,9 @@ const CONFIG_SECTIONS: Omit<ConfigItem, "value">[] = [
     description: "顧客問「下次開單」時的回覆內容",
   },
   {
-    key: "identity",
-    label: "身份設定",
-    description: "小螞蟻的角色定義與自我介紹時機",
+    key: "greeting",
+    label: "打招呼訊息",
+    description: "顧客呼叫小螞蟻時的歡迎訊息（純文字）",
   },
   {
     key: "mission",
@@ -150,16 +183,21 @@ export default function SettingsPage() {
         body: JSON.stringify({ key: editingKey, value: editValue }),
       });
 
+      const result = await res.json();
       if (res.ok) {
         setConfigs((prev) => {
           const next = new Map(prev);
           next.set(editingKey!, editValue);
           return next;
         });
-        setMessage("儲存成功！即時生效中");
+        if (result.warnings?.length > 0) {
+          setMessage("儲存成功！⚠️ " + result.warnings.join(", "));
+        } else {
+          setMessage("儲存成功！即時生效中");
+        }
         setEditingKey(null);
       } else {
-        setMessage("儲存失敗");
+        setMessage(result.error || "儲存失敗");
       }
     } catch {
       setMessage("網路錯誤");
@@ -319,9 +357,22 @@ export default function SettingsPage() {
               <textarea
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
+                maxLength={CONFIG_MAX_LENGTHS[editingKey!] || DEFAULT_MAX_LENGTH}
                 rows={15}
                 className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-stone-900 text-[13px] font-mono bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
               />
+              <div className="flex justify-between mt-1.5 px-1">
+                {hasSuspiciousContent(editValue) ? (
+                  <p className="text-[11px] text-orange-500">
+                    ⚠️ 內容可能包含注入語句，請確認
+                  </p>
+                ) : (
+                  <span />
+                )}
+                <p className="text-[11px] text-stone-400">
+                  {editValue.length} / {CONFIG_MAX_LENGTHS[editingKey!] || DEFAULT_MAX_LENGTH}
+                </p>
+              </div>
             </div>
             <div className="p-4 border-t border-stone-100 flex gap-3">
               <button

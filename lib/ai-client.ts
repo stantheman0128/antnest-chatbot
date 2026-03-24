@@ -246,6 +246,40 @@ export function splitResponse(text: string, maxSegments = 3): string[] {
   return segments.filter((s) => s.length > 0);
 }
 
+const MAX_USER_MESSAGE_LENGTH = 500;
+
+function sanitizeUserInput(message: string): string {
+  let sanitized = message.trim();
+
+  // Truncate to max length
+  if (sanitized.length > MAX_USER_MESSAGE_LENGTH) {
+    sanitized = sanitized.slice(0, MAX_USER_MESSAGE_LENGTH);
+  }
+
+  // Strip XML-like tags that could interfere with system prompt structure
+  sanitized = sanitized.replace(/<\/?[a-zA-Z_][a-zA-Z0-9_]*[^>]*>/g, "");
+
+  // Neutralize common injection patterns (both English and Chinese)
+  const injectionPatterns = [
+    /ignore\s+(all\s+)?(previous|above|prior)\s+(instructions?|prompts?|rules?)/gi,
+    /忽略(以上|上面|之前|先前)(的)?(指令|規則|提示|設定)/g,
+    /you\s+are\s+now\s+/gi,
+    /你(現在|從現在起)是/g,
+    /system\s*prompt/gi,
+    /jailbreak/gi,
+    /DAN\s+mode/gi,
+    /pretend\s+(you\s+are|to\s+be)\s+/gi,
+    /new\s+instructions?:/gi,
+    /override\s+(all\s+)?rules/gi,
+  ];
+
+  for (const pattern of injectionPatterns) {
+    sanitized = sanitized.replace(pattern, "[filtered]");
+  }
+
+  return sanitized;
+}
+
 async function callGemini(
   message: string,
   history: MessageHistory[]
@@ -272,7 +306,7 @@ async function callGemini(
 
   contents.push({
     role: "user",
-    parts: [{ text: message }],
+    parts: [{ text: sanitizeUserInput(message) }],
   });
 
   const response = await model.generateContent({

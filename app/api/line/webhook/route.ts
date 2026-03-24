@@ -289,6 +289,12 @@ async function handleTextMessage(
   const userId = event.source.userId;
   console.log("LINE message received:", userMessage);
 
+  // Guard: ignore absurdly long messages (likely spam or attack)
+  if (userMessage.length > 2000) {
+    console.log("LINE: Ignoring message exceeding 2000 chars, length:", userMessage.length);
+    return;
+  }
+
   // "呼叫闆娘" → deactivate bot, hand off to human
   if (userMessage.includes("呼叫闆娘")) {
     if (userId) {
@@ -311,9 +317,10 @@ async function handleTextMessage(
       await activateUser(userId);
       await deleteConfig(`pending_note:${userId}`);
     }
+    const greeting = await getConfig("greeting");
     const msg: TextMessage = {
       type: "text",
-      text: "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
+      text: greeting || "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
       quickReply: getQuickReply(false),
     };
     await sendMessages(event.replyToken, userId, [msg]);
