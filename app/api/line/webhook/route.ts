@@ -26,8 +26,8 @@ import {
   logConversation,
 } from "@/lib/data-service";
 
-// Extend Vercel function timeout (free plan: max 60s)
-export const maxDuration = 30;
+// Extend Vercel function timeout (free plan: max 60s, Pro: max 300s)
+export const maxDuration = 60;
 
 // Dedup: prevent processing the same event multiple times
 const recentEvents = new Map<string, number>();
@@ -444,7 +444,7 @@ async function handleTextMessage(
         "Content-Type": "application/json",
         Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
       },
-      body: JSON.stringify({ chatId: userId, loadingSeconds: 20 }),
+      body: JSON.stringify({ chatId: userId, loadingSeconds: 30 }),
     }).catch(() => {});
   }
 
@@ -453,7 +453,24 @@ async function handleTextMessage(
     await refreshStockIfStale();
   }
 
-  const aiResponse = await generateAIResponse(userMessage, []);
+  // AI generation with timeout protection — send fallback if too slow
+  let aiResponse;
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("AI_TIMEOUT")), 25000)
+    );
+    aiResponse = await Promise.race([
+      generateAIResponse(userMessage, []),
+      timeoutPromise,
+    ]);
+  } catch (err: any) {
+    console.error("LINE: AI generation failed:", err?.message);
+    const fallbackText = "不好意思，小螞蟻現在腦袋轉不過來 😵‍💫\n請稍後再試一次，或直接點下方「呼叫闆娘」找真人幫你喔！";
+    const msg: TextMessage = { type: "text", text: fallbackText, quickReply: getQuickReply(false) };
+    if (userId) logConversation(userId, "bot", fallbackText, { error: true, reason: err?.message });
+    try { await sendMessages(event.replyToken, userId, [msg]); } catch { /* reply token may be expired */ }
+    return;
+  }
 
   if (aiResponse.skip) {
     if (!alwaysRespond) {
