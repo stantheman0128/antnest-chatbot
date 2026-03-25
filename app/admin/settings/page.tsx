@@ -10,7 +10,7 @@ interface ConfigItem {
 }
 
 const AUTO_SYNC_KEY = "auto_sync_enabled";
-const AUTO_RESPOND_KEY = "auto_respond_enabled";
+const AUTO_RESPOND_IDS_KEY = "auto_respond_user_ids";
 
 const CONFIG_MAX_LENGTHS: Record<string, number> = {
   greeting: 500,
@@ -280,49 +280,47 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Auto-respond toggle */}
-        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 flex items-center justify-between">
+        {/* Auto-respond user IDs */}
+        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-2">
           <div>
-            <p className="text-[14px] font-medium text-stone-800">自動回應模式</p>
+            <p className="text-[14px] font-medium text-stone-800">自動回應名單</p>
             <p className="text-[11px] text-stone-400 mt-0.5">
-              開啟後小螞蟻會自動回覆所有訊息，不需要先「呼叫小螞蟻」
+              填入 LINE User ID，小螞蟻會自動回覆這些人的訊息（每行一個 ID）
             </p>
           </div>
+          <textarea
+            value={configs.get(AUTO_RESPOND_IDS_KEY) || ""}
+            onChange={(e) => {
+              setConfigs((prev) => {
+                const m = new Map(prev);
+                m.set(AUTO_RESPOND_IDS_KEY, e.target.value);
+                return m;
+              });
+            }}
+            rows={3}
+            className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[12px] text-stone-700 font-mono bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-y"
+            placeholder={"U0849d92dc4c5b54ee...\nU5a5c90a945394ff9..."}
+          />
           <button
             onClick={async () => {
-              const current = configs.get(AUTO_RESPOND_KEY);
-              const next = current === "true" ? "false" : "true";
+              const value = configs.get(AUTO_RESPOND_IDS_KEY) || "";
               const res = await fetch("/api/admin/config", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${getToken()}`,
                 },
-                body: JSON.stringify({ key: AUTO_RESPOND_KEY, value: next }),
+                body: JSON.stringify({ key: AUTO_RESPOND_IDS_KEY, value }),
               });
               if (res.ok) {
-                setConfigs((prev) => {
-                  const m = new Map(prev);
-                  m.set(AUTO_RESPOND_KEY, next);
-                  return m;
-                });
+                setMessage("自動回應名單已更新！");
+              } else {
+                setMessage("儲存失敗");
               }
             }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-              configs.get(AUTO_RESPOND_KEY) === "true"
-                ? "bg-amber-700"
-                : "bg-stone-200"
-            }`}
-            role="switch"
-            aria-checked={configs.get(AUTO_RESPOND_KEY) === "true"}
+            className="px-3 py-1.5 bg-amber-800 text-white rounded-lg text-[12px] font-medium hover:bg-amber-900 transition-colors"
           >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                configs.get(AUTO_RESPOND_KEY) === "true"
-                  ? "translate-x-6"
-                  : "translate-x-1"
-              }`}
-            />
+            儲存名單
           </button>
         </div>
       </div>

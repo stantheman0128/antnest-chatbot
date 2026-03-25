@@ -413,15 +413,13 @@ async function handleTextMessage(
     }
   }
 
-  // Dev bypass: always respond to developer without needing "呼叫小螞蟻"
+  // Always-respond list: env var (devs) + admin-managed user IDs
   const devIds = (process.env.DEV_LINE_USER_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
-  const isDev = userId ? devIds.includes(userId) : false;
+  const autoRespondIds = ((await getConfig("auto_respond_user_ids")) || "").split(/[\n,]/).map((id) => id.trim()).filter(Boolean);
+  const alwaysRespond = userId ? (devIds.includes(userId) || autoRespondIds.includes(userId)) : false;
 
-  // Auto-respond mode: admin toggle bypasses activation check for everyone
-  const autoRespond = (await getConfig("auto_respond_enabled")) === "true";
-
-  // Bot is opt-in — only respond if user has activated it (devs + auto-respond bypass)
-  if (!isDev && !autoRespond && (!userId || !(await isUserActive(userId)))) {
+  // Bot is opt-in — only respond if user has activated it (always-respond list bypasses)
+  if (!alwaysRespond && (!userId || !(await isUserActive(userId)))) {
     console.log("LINE: Bot inactive for user, skipping:", userId);
     return;
   }
@@ -434,12 +432,12 @@ async function handleTextMessage(
   const aiResponse = await generateAIResponse(userMessage, []);
 
   if (aiResponse.skip) {
-    if (!isDev) {
+    if (!alwaysRespond) {
       console.log("LINE: AI skipped message:", userMessage);
       return;
     }
-    // Dev mode: force a response even when AI wants to skip
-    aiResponse.text = aiResponse.text || "（AI 判定為 SKIP，dev mode 強制回覆）\n請換個方式提問試試～";
+    // Always-respond users: force a response even when AI wants to skip
+    aiResponse.text = aiResponse.text || "（AI 判定為 SKIP，強制回覆模式）\n請換個方式提問試試～";
   }
 
   if (aiResponse.escalate) {
