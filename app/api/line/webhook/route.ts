@@ -551,6 +551,18 @@ async function handlePostback(
   const data = event.postback.data;
   const time = event.postback.params?.time;
 
+  // Feedback: customer marks a response as bad
+  if (data === "FEEDBACK:BAD" && userId) {
+    logConversation(userId, "user", "[回答不滿意]", { feedback: "bad", flagged: true });
+    const msg: TextMessage = {
+      type: "text",
+      text: "感謝你的回饋！已記錄下來，闆娘會盡快改進 💪\n\n你可以直接點「呼叫闆娘」讓真人幫你解答喔！",
+      quickReply: getPausedQuickReply(),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    return;
+  }
+
   // Customer selects a date → show time type chooser
   if (data.startsWith("SELECT_DATE:") && userId) {
     const availabilityId = data.replace("SELECT_DATE:", "").trim();

@@ -6,6 +6,9 @@ const BRAND_COLOR = "#8B5E3C";
 const GRAY = "#999999";
 
 function buildBubble(product: ProductCard, variantName?: string): FlexBubble {
+  // Check if product is sold out
+  const allSoldOut = product.variants.length > 0 && product.variants.every((v) => !v.available);
+
   // Resolve image: use variant-specific photo if requested
   let heroImage = product.imageUrl;
   if (variantName && product.variants.length > 0) {
@@ -106,6 +109,33 @@ function buildBubble(product: ProductCard, variantName?: string): FlexBubble {
         },
         // Badge overlays
         ...badgeOverlays,
+        // Sold out overlay
+        ...(allSoldOut
+          ? [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "⚠️ 已售完",
+                    size: "sm",
+                    color: "#FFFFFF",
+                    weight: "bold",
+                    flex: 0,
+                  },
+                ],
+                position: "absolute",
+                offsetBottom: "8px",
+                offsetEnd: "8px",
+                backgroundColor: "#DC2626DD",
+                cornerRadius: "xl",
+                paddingAll: "6px",
+                paddingStart: "12px",
+                paddingEnd: "12px",
+              },
+            ]
+          : []),
       ],
       paddingAll: "0px",
     },
@@ -152,11 +182,11 @@ function buildBubble(product: ProductCard, variantName?: string): FlexBubble {
           type: "button",
           action: {
             type: "uri",
-            label: "立即選購 🛒",
+            label: allSoldOut ? "已售完 — 查看商品頁" : "立即選購 🛒",
             uri: product.storeUrl,
           },
-          style: "primary",
-          color: BRAND_COLOR,
+          style: allSoldOut ? "secondary" : "primary",
+          color: allSoldOut ? "#AAAAAA" : BRAND_COLOR,
           height: "sm",
         },
       ],
