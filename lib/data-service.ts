@@ -876,19 +876,35 @@ export async function getConversationHistory(
   }
 }
 
+// Shared complaint keywords — single source of truth for both backend and frontend
+export const COMPLAINT_KEYWORDS = [
+  "壞","破","爛","溢出","漏","退冰","融化","變質","發霉","異味","臭",
+  "不新鮮","有問題","品質","瑕疵","損壞","碎","裂","凹","髒",
+  "少了","缺","錯","不對","送錯","寄錯","沒收到",
+  "退款","退貨","客訴","投訴","不滿","失望","生氣","🥹","😡","😤","😭",
+];
+
 export async function resolveIssue(logId: string, resolved: boolean): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
   try {
-    // Fetch current metadata, merge resolved flag
-    const { data } = await sb.from("conversation_logs").select("metadata").eq("id", logId).single();
-    const metadata = { ...(data?.metadata || {}), resolved };
-    const { error } = await sb.from("conversation_logs").update({ metadata }).eq("id", logId);
-    return !error;
+    // Atomic JSON merge — no read-then-write race
+    const { error } = await sb.rpc("jsonb_merge_metadata", { log_id: logId, patch: { resolved } }).maybeSingle();
+    if (error) {
+      // Fallback: read-then-write if RPC not available
+      const { data } = await sb.from("conversation_logs").select("metadata").eq("id", logId).single();
+      const metadata = { ...(data?.metadata || {}), resolved };
+      const { error: updateErr } = await sb.from("conversation_logs").update({ metadata }).eq("id", logId);
+      return !updateErr;
+    }
+    return true;
   } catch {
     return false;
   }
 }
+
+let statsCache: CacheEntry<ConversationStats> | null = null;
+const STATS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 export interface ConversationStats {
   totalUsers: number;
@@ -911,12 +927,21 @@ export async function getConversationStats(): Promise<ConversationStats> {
     totalUsers: 0, totalMessages: 0, totalApiCalls: 0,
     avgLatencyMs: 0, estimatedTokens: 0, flaggedCount: 0, dailyStats: [],
   };
+
+  // TTL cache to avoid repeated full scans
+  if (statsCache && Date.now() - statsCache.timestamp < STATS_CACHE_TTL) return statsCache.data;
+
   const sb = getSupabase();
   if (!sb) return empty;
 
   try {
-    const { count: totalUsers } = await sb.from("line_users").select("*", { count: "exact", head: true });
-    const { data: logs } = await sb.from("conversation_logs").select("role, content, metadata, created_at");
+    // Scope to last 30 days to avoid unbounded scan
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: totalUsers }, { count: totalMessages }, { data: logs }] = await Promise.all([
+      sb.from("line_users").select("*", { count: "exact", head: true }),
+      sb.from("conversation_logs").select("*", { count: "exact", head: true }),
+      sb.from("conversation_logs").select("role, content, metadata, created_at").gte("created_at", thirtyDaysAgo),
+    ]);
     if (!logs) return { ...empty, totalUsers: totalUsers || 0 };
 
     const now = new Date();
@@ -971,15 +996,17 @@ export async function getConversationStats(): Promise<ConversationStats> {
       flagged: b.flagged,
     }));
 
-    return {
+    const result: ConversationStats = {
       totalUsers: totalUsers || 0,
-      totalMessages: logs.length,
+      totalMessages: totalMessages || logs.length,
       totalApiCalls,
       avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
       estimatedTokens: totalTokens,
       flaggedCount: flagged,
       dailyStats,
     };
+    statsCache = { data: result, timestamp: Date.now() };
+    return result;
   } catch (e: any) {
     if (e?.code !== "42P01") console.error("getConversationStats error:", e);
     return empty;
@@ -1004,31 +1031,29 @@ export async function getCustomersWithContext(): Promise<CustomerWithContext[]> 
   const sb = getSupabase();
   if (!sb) return [];
   try {
-    // Fetch users
-    const { data: users } = await sb.from("line_users").select("*").order("last_seen", { ascending: false });
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Parallel DB queries — all independent
+    const [{ data: users }, { data: logs }, { data: reservations }] = await Promise.all([
+      sb.from("line_users").select("*").order("last_seen", { ascending: false }),
+      sb.from("conversation_logs").select("line_user_id, role, content, metadata"),
+      sb.from("reservations")
+        .select("line_user_id, order_number, status, pickup_availability(available_date)")
+        .in("status", ["confirmed", "pending"])
+        .order("created_at", { ascending: false }),
+    ]);
     if (!users) return [];
 
-    // Fetch message counts + issue counts per user (explicit flags + complaint keywords)
-    const COMPLAINT_KEYWORDS = ["壞","破","爛","溢出","漏","退冰","融化","變質","發霉","異味","不新鮮","有問題","品質","瑕疵","損壞","少了","缺","送錯","寄錯","沒收到","退款","退貨","客訴","投訴","不滿","失望"];
-    const { data: logs } = await sb.from("conversation_logs").select("line_user_id, role, content, metadata");
     const msgCounts = new Map<string, number>();
     const flagCounts = new Map<string, number>();
     for (const log of logs || []) {
       msgCounts.set(log.line_user_id, (msgCounts.get(log.line_user_id) || 0) + 1);
       const isFlagged = log.metadata?.flagged;
-      const isComplaint = log.role === "user" && !isFlagged && COMPLAINT_KEYWORDS.some((kw: string) => (log.content || "").includes(kw));
+      const isComplaint = log.role === "user" && !isFlagged && COMPLAINT_KEYWORDS.some((kw) => (log.content || "").includes(kw));
       if (isFlagged || isComplaint) {
         flagCounts.set(log.line_user_id, (flagCounts.get(log.line_user_id) || 0) + 1);
       }
     }
-
-    // Fetch upcoming reservations (confirmed, future dates)
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: reservations } = await sb
-      .from("reservations")
-      .select("line_user_id, order_number, status, pickup_availability(available_date)")
-      .in("status", ["confirmed", "pending"])
-      .order("created_at", { ascending: false });
 
     const pickupMap = new Map<string, { date: string; orderNumber: string | null; status: string }>();
     for (const r of reservations || []) {

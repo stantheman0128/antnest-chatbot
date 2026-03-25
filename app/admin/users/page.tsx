@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { COMPLAINT_KEYWORDS } from "@/lib/data-service";
 
 interface Customer {
   lineUserId: string;
@@ -40,9 +41,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<Customer | null>(null);
   const [history, setHistory] = useState<ConversationLog[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
-  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [activeChart, setActiveChart] = useState<"apiCalls" | "latency" | "tokens">("apiCalls");
   const [customerFilter, setCustomerFilter] = useState<"recent" | "pickup" | "flagged">("recent");
 
@@ -70,20 +70,19 @@ export default function UsersPage() {
 
   async function selectUser(user: Customer) {
     setSelectedUser(user);
-    setLoadingHistory(true);
+    setLoadingDetail(true);
     setSummary(null);
-    try {
-      const res = await fetch(`/api/admin/users?id=${user.lineUserId}&limit=100`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      if (res.ok) setHistory(await res.json());
-    } catch { setHistory([]); }
-    setLoadingHistory(false);
+    setHistory([]);
 
-    setLoadingSummary(true);
-    try {
-      const res = await fetch(`/api/admin/users?id=${user.lineUserId}&summary`, { headers: { Authorization: `Bearer ${getToken()}` } });
-      if (res.ok) { const data = await res.json(); setSummary(data.summary); }
-    } catch { /* ignore */ }
-    setLoadingSummary(false);
+    // Parallel fetch: history + AI summary
+    const headers = { Authorization: `Bearer ${getToken()}` };
+    const [histRes, sumRes] = await Promise.all([
+      fetch(`/api/admin/users?id=${user.lineUserId}&limit=100`, { headers }).catch(() => null),
+      fetch(`/api/admin/users?id=${user.lineUserId}&summary`, { headers }).catch(() => null),
+    ]);
+    if (histRes?.ok) setHistory(await histRes.json());
+    if (sumRes?.ok) { const data = await sumRes.json(); setSummary(data.summary); }
+    setLoadingDetail(false);
   }
 
   function timeAgo(dateStr: string): string {
@@ -117,12 +116,6 @@ export default function UsersPage() {
 
   // ── Customer detail view ──
   if (selectedUser) {
-    const COMPLAINT_KEYWORDS = [
-      "壞","破","爛","溢出","漏","退冰","融化","變質","發霉","異味","臭",
-      "不新鮮","有問題","品質","瑕疵","損壞","碎","裂","凹","髒",
-      "少了","缺","錯","不對","送錯","寄錯","沒收到",
-      "退款","退貨","客訴","投訴","不滿","失望","生氣","🥹","😡","😤","😭",
-    ];
 
     // Build issues list from history
     const chronological = [...history].reverse();
@@ -185,7 +178,7 @@ export default function UsersPage() {
           </div>
           {/* AI summary inline */}
           <div className="bg-amber-50 rounded-xl px-3 py-2">
-            {loadingSummary ? (
+            {loadingDetail ? (
               <p className="text-[12px] text-amber-700 animate-pulse">摘要分析中...</p>
             ) : (
               <p className="text-[12px] text-amber-900">{summary || "尚無對話紀錄"}</p>
@@ -270,6 +263,20 @@ export default function UsersPage() {
   }
 
   // ── Dashboard view ──
+  const filteredCustomers = useMemo(() => {
+    const list = [...customers];
+    if (customerFilter === "pickup") {
+      return list.filter((c) => c.upcomingPickup).sort((a, b) => (a.upcomingPickup || "").localeCompare(b.upcomingPickup || ""));
+    }
+    if (customerFilter === "flagged") {
+      return list.filter((c) => c.flaggedCount > 0).sort((a, b) => b.flaggedCount - a.flaggedCount);
+    }
+    return list.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+  }, [customers, customerFilter]);
+
+  const pickupCount = useMemo(() => customers.filter((c) => c.upcomingPickup).length, [customers]);
+  const flaggedTabCount = useMemo(() => customers.filter((c) => c.flaggedCount > 0).length, [customers]);
+
   const chartData = stats?.dailyStats || [];
   const chartValues = chartData.map((d) =>
     activeChart === "apiCalls" ? d.apiCalls
@@ -369,38 +376,24 @@ export default function UsersPage() {
               }`}
             >
               {tab.label}
-              {tab.key === "pickup" && customers.filter((c) => c.upcomingPickup).length > 0 && (
-                <span className="ml-1 text-[9px]">({customers.filter((c) => c.upcomingPickup).length})</span>
+              {tab.key === "pickup" && pickupCount > 0 && (
+                <span className="ml-1 text-[9px]">({pickupCount})</span>
               )}
-              {tab.key === "flagged" && customers.filter((c) => c.flaggedCount > 0).length > 0 && (
-                <span className="ml-1 text-[9px]">({customers.filter((c) => c.flaggedCount > 0).length})</span>
+              {tab.key === "flagged" && flaggedTabCount > 0 && (
+                <span className="ml-1 text-[9px]">({flaggedTabCount})</span>
               )}
             </button>
           ))}
         </div>
-        {(() => {
-          let filtered = [...customers];
-          if (customerFilter === "pickup") {
-            filtered = filtered.filter((c) => c.upcomingPickup);
-            filtered.sort((a, b) => (a.upcomingPickup || "").localeCompare(b.upcomingPickup || ""));
-          } else if (customerFilter === "flagged") {
-            filtered = filtered.filter((c) => c.flaggedCount > 0);
-            filtered.sort((a, b) => b.flaggedCount - a.flaggedCount);
-          } else {
-            filtered.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
-          }
-
-          if (filtered.length === 0) return (
-            <div className="bg-white rounded-2xl border border-stone-100 py-12 text-center">
-              <p className="text-[13px] font-medium text-stone-600 mb-1">
-                {customerFilter === "pickup" ? "目前沒有近期取貨的顧客" : customerFilter === "flagged" ? "沒有問題回饋紀錄" : "還沒有顧客紀錄"}
-              </p>
-            </div>
-          );
-
-          return (
+        {filteredCustomers.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-stone-100 py-12 text-center">
+            <p className="text-[13px] font-medium text-stone-600 mb-1">
+              {customerFilter === "pickup" ? "目前沒有近期取貨的顧客" : customerFilter === "flagged" ? "沒有問題回饋紀錄" : "還沒有顧客紀錄"}
+            </p>
+          </div>
+        ) : (
           <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden divide-y divide-stone-100">
-            {filtered.map((c) => (
+            {filteredCustomers.map((c) => (
               <button
                 key={c.lineUserId}
                 onClick={() => selectUser(c)}
@@ -436,8 +429,7 @@ export default function UsersPage() {
               </button>
             ))}
           </div>
-          );
-        })()}
+        )}
       </div>
     </div>
   );
