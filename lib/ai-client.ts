@@ -410,7 +410,7 @@ export async function generateConversationSummary(
   try {
     const genAI = getAIClient();
     const model = genAI.getGenerativeModel({
-      model: DEFAULT_MODEL,
+      model: FAILOVER_MODEL,
       systemInstruction: "你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。",
     });
 
@@ -423,7 +423,7 @@ export async function generateConversationSummary(
         contents: [{ role: "user", parts: [{ text: conversationText }] }],
         generationConfig: { maxOutputTokens: 100, temperature: 0.3 },
       }),
-      15000,
+      20000,
       "summary"
     );
 
