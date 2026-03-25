@@ -876,6 +876,203 @@ export async function getConversationHistory(
   }
 }
 
+export async function resolveIssue(logId: string, resolved: boolean): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  try {
+    // Fetch current metadata, merge resolved flag
+    const { data } = await sb.from("conversation_logs").select("metadata").eq("id", logId).single();
+    const metadata = { ...(data?.metadata || {}), resolved };
+    const { error } = await sb.from("conversation_logs").update({ metadata }).eq("id", logId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export interface ConversationStats {
+  totalUsers: number;
+  totalMessages: number;
+  totalApiCalls: number;
+  avgLatencyMs: number;
+  estimatedTokens: number;
+  flaggedCount: number;
+  dailyStats: Array<{
+    date: string;
+    apiCalls: number;
+    avgLatency: number;
+    tokens: number;
+    flagged: number;
+  }>;
+}
+
+export async function getConversationStats(): Promise<ConversationStats> {
+  const empty: ConversationStats = {
+    totalUsers: 0, totalMessages: 0, totalApiCalls: 0,
+    avgLatencyMs: 0, estimatedTokens: 0, flaggedCount: 0, dailyStats: [],
+  };
+  const sb = getSupabase();
+  if (!sb) return empty;
+
+  try {
+    const { count: totalUsers } = await sb.from("line_users").select("*", { count: "exact", head: true });
+    const { data: logs } = await sb.from("conversation_logs").select("role, content, metadata, created_at");
+    if (!logs) return { ...empty, totalUsers: totalUsers || 0 };
+
+    const now = new Date();
+    let totalApiCalls = 0, flagged = 0, totalLatency = 0, latencyCount = 0, totalTokens = 0;
+
+    // Daily buckets for last 7 days
+    const dayMap = new Map<string, { apiCalls: number; latencySum: number; latencyCount: number; tokens: number; flagged: number }>();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      dayMap.set(d.toISOString().slice(0, 10), { apiCalls: 0, latencySum: 0, latencyCount: 0, tokens: 0, flagged: 0 });
+    }
+
+    for (const log of logs) {
+      // Estimate tokens: Chinese ~0.5 tokens per char, system prompt ~2350 tokens per API call
+      const contentTokens = Math.ceil((log.content?.length || 0) * 0.5);
+
+      if (log.role === "bot") {
+        totalApiCalls++;
+        totalTokens += 2350 + contentTokens; // system prompt + output
+        const lat = log.metadata?.latencyMs;
+        if (typeof lat === "number") {
+          totalLatency += lat;
+          latencyCount++;
+        }
+      } else {
+        totalTokens += contentTokens; // input only
+      }
+
+      if (log.metadata?.flagged) flagged++;
+
+      const logDate = (log.created_at || "").slice(0, 10);
+      const bucket = dayMap.get(logDate);
+      if (bucket) {
+        if (log.role === "bot") {
+          bucket.apiCalls++;
+          bucket.tokens += 2350 + contentTokens;
+          const lat = log.metadata?.latencyMs;
+          if (typeof lat === "number") { bucket.latencySum += lat; bucket.latencyCount++; }
+        } else {
+          bucket.tokens += contentTokens;
+        }
+        if (log.metadata?.flagged) bucket.flagged++;
+      }
+    }
+
+    const dailyStats = [...dayMap.entries()].map(([date, b]) => ({
+      date: `${parseInt(date.slice(5, 7))}/${parseInt(date.slice(8, 10))}`,
+      apiCalls: b.apiCalls,
+      avgLatency: b.latencyCount > 0 ? Math.round(b.latencySum / b.latencyCount) : 0,
+      tokens: b.tokens,
+      flagged: b.flagged,
+    }));
+
+    return {
+      totalUsers: totalUsers || 0,
+      totalMessages: logs.length,
+      totalApiCalls,
+      avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
+      estimatedTokens: totalTokens,
+      flaggedCount: flagged,
+      dailyStats,
+    };
+  } catch (e: any) {
+    if (e?.code !== "42P01") console.error("getConversationStats error:", e);
+    return empty;
+  }
+}
+
+export interface CustomerWithContext {
+  lineUserId: string;
+  displayName: string;
+  pictureUrl: string | null;
+  firstSeen: string;
+  lastSeen: string;
+  messageCount: number;
+  flaggedCount: number;
+  // From reservations
+  upcomingPickup: string | null;
+  orderNumber: string | null;
+  reservationStatus: string | null;
+}
+
+export async function getCustomersWithContext(): Promise<CustomerWithContext[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  try {
+    // Fetch users
+    const { data: users } = await sb.from("line_users").select("*").order("last_seen", { ascending: false });
+    if (!users) return [];
+
+    // Fetch message counts + issue counts per user (explicit flags + complaint keywords)
+    const COMPLAINT_KEYWORDS = ["壞","破","爛","溢出","漏","退冰","融化","變質","發霉","異味","不新鮮","有問題","品質","瑕疵","損壞","少了","缺","送錯","寄錯","沒收到","退款","退貨","客訴","投訴","不滿","失望"];
+    const { data: logs } = await sb.from("conversation_logs").select("line_user_id, role, content, metadata");
+    const msgCounts = new Map<string, number>();
+    const flagCounts = new Map<string, number>();
+    for (const log of logs || []) {
+      msgCounts.set(log.line_user_id, (msgCounts.get(log.line_user_id) || 0) + 1);
+      const isFlagged = log.metadata?.flagged;
+      const isComplaint = log.role === "user" && !isFlagged && COMPLAINT_KEYWORDS.some((kw: string) => (log.content || "").includes(kw));
+      if (isFlagged || isComplaint) {
+        flagCounts.set(log.line_user_id, (flagCounts.get(log.line_user_id) || 0) + 1);
+      }
+    }
+
+    // Fetch upcoming reservations (confirmed, future dates)
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: reservations } = await sb
+      .from("reservations")
+      .select("line_user_id, order_number, status, pickup_availability(available_date)")
+      .in("status", ["confirmed", "pending"])
+      .order("created_at", { ascending: false });
+
+    const pickupMap = new Map<string, { date: string; orderNumber: string | null; status: string }>();
+    for (const r of reservations || []) {
+      const date = (r as any).pickup_availability?.available_date;
+      if (date && date >= today && !pickupMap.has(r.line_user_id)) {
+        pickupMap.set(r.line_user_id, { date, orderNumber: r.order_number, status: r.status });
+      }
+    }
+
+    // Combine and sort: upcoming pickups first, then flagged, then recent
+    const customers: CustomerWithContext[] = users.map((u: any) => {
+      const pickup = pickupMap.get(u.line_user_id);
+      return {
+        lineUserId: u.line_user_id,
+        displayName: u.display_name,
+        pictureUrl: u.picture_url || null,
+        firstSeen: u.first_seen,
+        lastSeen: u.last_seen,
+        messageCount: msgCounts.get(u.line_user_id) || 0,
+        flaggedCount: flagCounts.get(u.line_user_id) || 0,
+        upcomingPickup: pickup?.date || null,
+        orderNumber: pickup?.orderNumber || null,
+        reservationStatus: pickup?.status || null,
+      };
+    });
+
+    customers.sort((a, b) => {
+      // Upcoming pickups first
+      if (a.upcomingPickup && !b.upcomingPickup) return -1;
+      if (!a.upcomingPickup && b.upcomingPickup) return 1;
+      // Then flagged (needs attention)
+      if (a.flaggedCount > 0 && b.flaggedCount === 0) return -1;
+      if (a.flaggedCount === 0 && b.flaggedCount > 0) return 1;
+      // Then by recent activity
+      return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
+    });
+
+    return customers;
+  } catch (e: any) {
+    if (e?.code !== "42P01") console.error("getCustomersWithContext error:", e);
+    return [];
+  }
+}
+
 // ── DB → App Type Mapping ──────────────────────────────
 
 function mapDbProduct(row: any): ProductCard {

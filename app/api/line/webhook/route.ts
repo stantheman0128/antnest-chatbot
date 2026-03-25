@@ -455,6 +455,7 @@ async function handleTextMessage(
 
   // AI generation with timeout protection — send fallback if too slow
   let aiResponse;
+  const aiStartTime = Date.now();
   try {
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("AI_TIMEOUT")), 25000)
@@ -524,9 +525,10 @@ async function handleTextMessage(
   }
 
   // Log bot response before sending (so we capture it even if send fails)
+  const aiLatencyMs = Date.now() - aiStartTime;
   if (userId) {
     const productIds = aiResponse.productSpecs.map((p: any) => p.id);
-    logConversation(userId, "bot", aiResponse.text, productIds.length > 0 ? { products: productIds } : undefined);
+    logConversation(userId, "bot", aiResponse.text, { latencyMs: aiLatencyMs, ...(productIds.length > 0 ? { products: productIds } : {}) });
   }
 
   try {
