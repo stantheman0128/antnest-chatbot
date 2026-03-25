@@ -94,6 +94,35 @@ export async function resolveIssue(logId: string, resolved: boolean): Promise<bo
   } catch { return false; }
 }
 
+// ── Summary Cache ─────────────────────────────────────
+
+export async function getCachedSummary(lineUserId: string): Promise<{ summary: string; updatedAt: string } | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const { data } = await sb.from("line_users")
+      .select("summary, summary_updated_at")
+      .eq("line_user_id", lineUserId)
+      .single();
+    if (data?.summary && data?.summary_updated_at) {
+      return { summary: data.summary, updatedAt: data.summary_updated_at };
+    }
+    return null;
+  } catch { return null; }
+}
+
+export async function saveSummary(lineUserId: string, summary: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    await sb.from("line_users")
+      .update({ summary, summary_updated_at: new Date().toISOString() })
+      .eq("line_user_id", lineUserId);
+  } catch (e: any) {
+    console.error("saveSummary error:", e?.message);
+  }
+}
+
 // ── Stats ─────────────────────────────────────────────
 
 const STATS_CACHE_TTL = 2 * 60 * 1000;

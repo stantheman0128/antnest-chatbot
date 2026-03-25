@@ -70,4 +70,6 @@ export {
   resolveIssue,
   getConversationStats,
   getCustomersWithContext,
+  getCachedSummary,
+  saveSummary,
 } from "./db-logging";
