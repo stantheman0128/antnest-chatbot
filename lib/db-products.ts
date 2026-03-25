@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { getSupabase } from "./supabase";
 import { cache, isCacheValid, CacheEntry } from "./db-cache";
 
@@ -155,6 +153,8 @@ export async function deleteProduct(id: string): Promise<boolean> {
 
 function getStaticProducts(): ProductCard[] {
   try {
+    const fs = require("fs");
+    const path = require("path");
     const filePath = path.join(process.cwd(), "data", "product-cards.json");
     const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     return Object.entries(raw).map(([id, p]: [string, any], i) => ({

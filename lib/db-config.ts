@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import { getSupabase } from "./supabase";
 import { cache, isCacheValid, CacheEntry } from "./db-cache";
 
@@ -90,6 +88,8 @@ export async function getAllConfigs(): Promise<SystemConfig[]> {
 function getStaticConfig(): Map<string, string> {
   const map = new Map<string, string>();
   try {
+    const fs = require("fs");
+    const path = require("path");
     const filePath = path.join(process.cwd(), "data", "system-prompt.md");
     const content = fs.readFileSync(filePath, "utf-8");
 
