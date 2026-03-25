@@ -22,6 +22,8 @@ import {
   getConfig,
   setConfig,
   deleteConfig,
+  upsertLineUser,
+  logConversation,
 } from "@/lib/data-service";
 
 // Extend Vercel function timeout (free plan: max 60s)
@@ -289,6 +291,14 @@ async function handleTextMessage(
   const userId = event.source.userId;
   console.log("LINE message received:", userMessage);
 
+  // Log user + message (fire-and-forget)
+  if (userId) {
+    getLineProfile(userId).then((profile) => {
+      upsertLineUser(userId, profile?.displayName || "LINE用戶", (profile as any)?.pictureUrl);
+    }).catch(() => {});
+    logConversation(userId, "user", userMessage);
+  }
+
   // Guard: ignore absurdly long messages (likely spam or attack)
   if (userMessage.length > 2000) {
     console.log("LINE: Ignoring message exceeding 2000 chars, length:", userMessage.length);
@@ -307,6 +317,7 @@ async function handleTextMessage(
       quickReply: getPausedQuickReply(),
     };
     await sendMessages(event.replyToken, userId, [msg]);
+    if (userId) logConversation(userId, "bot", msg.text, { action: "handoff" });
     console.log("LINE: Human handoff, bot paused for user", userId);
     return;
   }
@@ -318,12 +329,14 @@ async function handleTextMessage(
       await deleteConfig(`pending_note:${userId}`);
     }
     const greeting = await getConfig("greeting");
+    const greetingText = greeting || "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？";
     const msg: TextMessage = {
       type: "text",
-      text: greeting || "小螞蟻回來啦！🐜\n有什麼可以幫你的嗎？",
+      text: greetingText,
       quickReply: getQuickReply(false),
     };
     await sendMessages(event.replyToken, userId, [msg]);
+    if (userId) logConversation(userId, "bot", greetingText, { action: "greeting" });
     console.log("LINE: Bot resumed for user", userId);
     return;
   }
@@ -440,13 +453,15 @@ async function handleTextMessage(
   }
 
   if (aiResponse.escalate) {
+    const escalateText = aiResponse.text || "這個問題幫你轉接闆娘～她會盡快回覆你喔！😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！";
     const msg: TextMessage = {
       type: "text",
-      text: aiResponse.text || "這個問題幫你轉接闆娘～她會盡快回覆你喔！😊\n\n如果之後想問商品、價格、運費等問題，按下方「呼叫小螞蟻🐜」就有 AI 小幫手幫你解答喔！",
+      text: escalateText,
       quickReply: getPausedQuickReply(),
     };
     if (userId) await deactivateUser(userId);
     await sendMessages(event.replyToken, userId, [msg]);
+    if (userId) logConversation(userId, "bot", escalateText, { action: "escalate", reason: aiResponse.escalateReason });
     console.log("LINE: AI escalated to human, reason:", aiResponse.escalateReason);
     return;
   }
@@ -456,6 +471,7 @@ async function handleTextMessage(
     if (pickupMessages.length > 0) {
       await sendMessages(event.replyToken, userId, pickupMessages);
     }
+    if (userId) logConversation(userId, "bot", aiResponse.text || "(取貨日期選擇)", { action: "pickup_carousel" });
     console.log("LINE: Pickup date carousel sent to user");
     return;
   }
@@ -479,7 +495,11 @@ async function handleTextMessage(
   }
 
   await sendMessages(event.replyToken, userId, messages);
-  if (userId) await touchBotActivity(userId);
+  if (userId) {
+    const productIds = aiResponse.productSpecs.map((p: any) => p.id);
+    logConversation(userId, "bot", aiResponse.text, productIds.length > 0 ? { products: productIds } : undefined);
+    await touchBotActivity(userId);
+  }
 }
 
 async function handlePostback(

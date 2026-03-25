@@ -757,6 +757,125 @@ function getStaticConfig(): Map<string, string> {
   return map;
 }
 
+// ── LINE Users & Conversation Logs ────────────────────
+
+export interface LineUser {
+  lineUserId: string;
+  displayName: string;
+  pictureUrl: string | null;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface ConversationLog {
+  id: string;
+  lineUserId: string;
+  role: "user" | "bot";
+  content: string;
+  metadata: Record<string, any>;
+  createdAt: string;
+}
+
+export async function upsertLineUser(
+  lineUserId: string,
+  displayName: string,
+  pictureUrl?: string | null
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    await sb.from("line_users").upsert(
+      {
+        line_user_id: lineUserId,
+        display_name: displayName,
+        picture_url: pictureUrl || null,
+        last_seen: new Date().toISOString(),
+      },
+      { onConflict: "line_user_id", ignoreDuplicates: false }
+    );
+  } catch (e: any) {
+    if (e?.code !== "42P01") console.error("upsertLineUser error:", e);
+  }
+}
+
+export function logConversation(
+  lineUserId: string,
+  role: "user" | "bot",
+  content: string,
+  metadata?: Record<string, any>
+): void {
+  const sb = getSupabase();
+  if (!sb) return;
+  // Fire-and-forget — don't block webhook response
+  sb.from("conversation_logs")
+    .insert({
+      line_user_id: lineUserId,
+      role,
+      content,
+      metadata: metadata || {},
+      created_at: new Date().toISOString(),
+    })
+    .then(({ error }) => {
+      if (error && error.code !== "42P01") {
+        console.error("logConversation error:", error);
+      }
+    });
+}
+
+export async function getAllLineUsers(): Promise<LineUser[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  try {
+    const { data, error } = await sb
+      .from("line_users")
+      .select("*")
+      .order("last_seen", { ascending: false });
+    if (error) {
+      if (error.code !== "42P01") console.error("getAllLineUsers error:", error);
+      return [];
+    }
+    return (data || []).map((r: any) => ({
+      lineUserId: r.line_user_id,
+      displayName: r.display_name,
+      pictureUrl: r.picture_url || null,
+      firstSeen: r.first_seen,
+      lastSeen: r.last_seen,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function getConversationHistory(
+  lineUserId: string,
+  limit = 50
+): Promise<ConversationLog[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  try {
+    const { data, error } = await sb
+      .from("conversation_logs")
+      .select("*")
+      .eq("line_user_id", lineUserId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      if (error.code !== "42P01") console.error("getConversationHistory error:", error);
+      return [];
+    }
+    return (data || []).map((r: any) => ({
+      id: r.id,
+      lineUserId: r.line_user_id,
+      role: r.role,
+      content: r.content,
+      metadata: r.metadata || {},
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 // ── DB → App Type Mapping ──────────────────────────────
 
 function mapDbProduct(row: any): ProductCard {
