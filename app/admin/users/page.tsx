@@ -44,6 +44,7 @@ export default function UsersPage() {
   const [summary, setSummary] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [activeChart, setActiveChart] = useState<"apiCalls" | "latency" | "tokens">("apiCalls");
+  const [customerFilter, setCustomerFilter] = useState<"recent" | "pickup" | "flagged">("recent");
 
   function getToken() {
     return localStorage.getItem("admin_token") || "";
@@ -257,24 +258,21 @@ export default function UsersPage() {
           </div>
 
           {/* Bar chart */}
-          <div className="flex items-end gap-1.5 h-24">
+          <div className="flex items-end gap-1.5" style={{ height: "96px" }}>
             {chartData.map((d, i) => {
               const val = chartValues[i];
-              const height = maxChartVal > 0 ? (val / maxChartVal) * 100 : 0;
+              const barH = maxChartVal > 0 ? Math.max((val / maxChartVal) * 72, val > 0 ? 4 : 0) : 0;
+              const label = activeChart === "latency" ? (val > 0 ? `${(val / 1000).toFixed(1)}s` : "—")
+                : activeChart === "tokens" ? formatTokens(val)
+                : String(val);
               return (
-                <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                  <p className="text-[9px] text-stone-500 font-medium">
-                    {activeChart === "latency" ? (val > 0 ? `${(val / 1000).toFixed(1)}s` : "—")
-                      : activeChart === "tokens" ? formatTokens(val)
-                      : val}
-                  </p>
+                <div key={d.date} className="flex-1 flex flex-col items-center justify-end" style={{ height: "96px" }}>
+                  <p className="text-[9px] text-stone-500 font-medium mb-1">{label}</p>
                   <div
-                    className={`w-full rounded-t-md transition-all ${
-                      d.flagged > 0 ? "bg-red-400" : "bg-amber-600"
-                    }`}
-                    style={{ height: `${Math.max(height, 2)}%` }}
+                    className={`w-full max-w-[28px] rounded-t-md ${d.flagged > 0 ? "bg-red-400" : "bg-amber-600"}`}
+                    style={{ height: `${barH}px` }}
                   />
-                  <p className="text-[9px] text-stone-400">{d.date}</p>
+                  <p className="text-[9px] text-stone-400 mt-1">{d.date}</p>
                 </div>
               );
             })}
@@ -282,19 +280,59 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* Customer list */}
+      {/* Customer list with filter tabs */}
       <div>
-        <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
-          顧客列表（{customers.length}）
-        </p>
-        {customers.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-stone-100 py-12 text-center">
-            <p className="text-[13px] font-medium text-stone-600 mb-1">還沒有顧客紀錄</p>
-            <p className="text-[12px] text-stone-400">有人跟小螞蟻互動後就會出現在這裡</p>
-          </div>
-        ) : (
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">
+            顧客列表（{customers.length}）
+          </p>
+        </div>
+        <div className="flex gap-1 mb-3">
+          {([
+            { key: "recent" as const, label: "最新訊息" },
+            { key: "pickup" as const, label: "近期取貨" },
+            { key: "flagged" as const, label: "問題回饋" },
+          ]).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setCustomerFilter(tab.key)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                customerFilter === tab.key ? "bg-amber-800 text-white" : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+              }`}
+            >
+              {tab.label}
+              {tab.key === "pickup" && customers.filter((c) => c.upcomingPickup).length > 0 && (
+                <span className="ml-1 text-[9px]">({customers.filter((c) => c.upcomingPickup).length})</span>
+              )}
+              {tab.key === "flagged" && customers.filter((c) => c.flaggedCount > 0).length > 0 && (
+                <span className="ml-1 text-[9px]">({customers.filter((c) => c.flaggedCount > 0).length})</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {(() => {
+          let filtered = [...customers];
+          if (customerFilter === "pickup") {
+            filtered = filtered.filter((c) => c.upcomingPickup);
+            filtered.sort((a, b) => (a.upcomingPickup || "").localeCompare(b.upcomingPickup || ""));
+          } else if (customerFilter === "flagged") {
+            filtered = filtered.filter((c) => c.flaggedCount > 0);
+            filtered.sort((a, b) => b.flaggedCount - a.flaggedCount);
+          } else {
+            filtered.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+          }
+
+          if (filtered.length === 0) return (
+            <div className="bg-white rounded-2xl border border-stone-100 py-12 text-center">
+              <p className="text-[13px] font-medium text-stone-600 mb-1">
+                {customerFilter === "pickup" ? "目前沒有近期取貨的顧客" : customerFilter === "flagged" ? "沒有問題回饋紀錄" : "還沒有顧客紀錄"}
+              </p>
+            </div>
+          );
+
+          return (
           <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden divide-y divide-stone-100">
-            {customers.map((c) => (
+            {filtered.map((c) => (
               <button
                 key={c.lineUserId}
                 onClick={() => selectUser(c)}
@@ -330,7 +368,8 @@ export default function UsersPage() {
               </button>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
