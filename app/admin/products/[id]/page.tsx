@@ -338,11 +338,11 @@ export default function ProductEditPage() {
           ) : (
             <div className="space-y-2.5 bg-stone-50 rounded-xl p-3">
               {([
-                { key: "descIntro" as const, label: "商品特色", rows: 3, ph: "產品特色介紹..." },
-                { key: "descSpecs" as const, label: "規格說明", rows: 1, ph: "尺寸、重量、成分等..." },
-                { key: "descStorage" as const, label: "保存方式", rows: 2, ph: "冷凍/冷藏保存方式..." },
-                { key: "descShelfLife" as const, label: "保存期限", rows: 1, ph: "冷凍1個月 / 冷藏2-3天..." },
-                { key: "descUsage" as const, label: "食用方式", rows: 2, ph: "退冰時間、回烤方式等..." },
+                { key: "descIntro" as const, label: "商品特色", rows: 5, ph: "產品特色介紹..." },
+                { key: "descSpecs" as const, label: "規格說明", rows: 2, ph: "尺寸、重量、成分等..." },
+                { key: "descStorage" as const, label: "保存方式", rows: 4, ph: "冷凍/冷藏保存方式..." },
+                { key: "descShelfLife" as const, label: "保存期限", rows: 2, ph: "冷凍1個月 / 冷藏2-3天..." },
+                { key: "descUsage" as const, label: "食用方式", rows: 4, ph: "退冰時間、回烤方式等..." },
               ]).map(({ key, label, rows, ph }) => (
                 <div key={key}>
                   <label className="block text-[10px] font-semibold text-stone-400 mb-1 uppercase tracking-widest">
@@ -352,7 +352,7 @@ export default function ProductEditPage() {
                     value={form[key]}
                     onChange={(e) => updateField(key, e.target.value)}
                     rows={rows}
-                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-gray-900 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
+                    className="w-full px-3 py-2 border border-stone-200 rounded-lg text-gray-900 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-y"
                     placeholder={ph}
                   />
                 </div>

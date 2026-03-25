@@ -10,6 +10,7 @@ interface ConfigItem {
 }
 
 const AUTO_SYNC_KEY = "auto_sync_enabled";
+const AUTO_RESPOND_KEY = "auto_respond_enabled";
 
 const CONFIG_MAX_LENGTHS: Record<string, number> = {
   greeting: 500,
@@ -272,6 +273,52 @@ export default function SettingsPage() {
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                 configs.get(AUTO_SYNC_KEY) !== "false"
+                  ? "translate-x-6"
+                  : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {/* Auto-respond toggle */}
+        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-[14px] font-medium text-stone-800">自動回應模式</p>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              開啟後小螞蟻會自動回覆所有訊息，不需要先「呼叫小螞蟻」
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              const current = configs.get(AUTO_RESPOND_KEY);
+              const next = current === "true" ? "false" : "true";
+              const res = await fetch("/api/admin/config", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({ key: AUTO_RESPOND_KEY, value: next }),
+              });
+              if (res.ok) {
+                setConfigs((prev) => {
+                  const m = new Map(prev);
+                  m.set(AUTO_RESPOND_KEY, next);
+                  return m;
+                });
+              }
+            }}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+              configs.get(AUTO_RESPOND_KEY) === "true"
+                ? "bg-amber-700"
+                : "bg-stone-200"
+            }`}
+            role="switch"
+            aria-checked={configs.get(AUTO_RESPOND_KEY) === "true"}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                configs.get(AUTO_RESPOND_KEY) === "true"
                   ? "translate-x-6"
                   : "translate-x-1"
               }`}

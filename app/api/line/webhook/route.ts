@@ -417,8 +417,11 @@ async function handleTextMessage(
   const devIds = (process.env.DEV_LINE_USER_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
   const isDev = userId ? devIds.includes(userId) : false;
 
-  // Bot is opt-in — only respond if user has activated it (devs bypass)
-  if (!isDev && (!userId || !(await isUserActive(userId)))) {
+  // Auto-respond mode: admin toggle bypasses activation check for everyone
+  const autoRespond = (await getConfig("auto_respond_enabled")) === "true";
+
+  // Bot is opt-in — only respond if user has activated it (devs + auto-respond bypass)
+  if (!isDev && !autoRespond && (!userId || !(await isUserActive(userId)))) {
     console.log("LINE: Bot inactive for user, skipping:", userId);
     return;
   }
