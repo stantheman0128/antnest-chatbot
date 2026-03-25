@@ -423,7 +423,7 @@ export async function generateConversationSummary(
         contents: [{ role: "user", parts: [{ text: conversationText }] }],
         generationConfig: { maxOutputTokens: 100, temperature: 0.3 },
       }),
-      8000,
+      15000,
       "summary"
     );
 
