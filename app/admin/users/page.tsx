@@ -106,6 +106,21 @@ export default function UsersPage() {
     return String(n);
   }
 
+  // Hooks must be called before any early returns (React rules of hooks)
+  const filteredCustomers = useMemo(() => {
+    const list = [...customers];
+    if (customerFilter === "pickup") {
+      return list.filter((c) => c.upcomingPickup).sort((a, b) => (a.upcomingPickup || "").localeCompare(b.upcomingPickup || ""));
+    }
+    if (customerFilter === "flagged") {
+      return list.filter((c) => c.flaggedCount > 0).sort((a, b) => b.flaggedCount - a.flaggedCount);
+    }
+    return list.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+  }, [customers, customerFilter]);
+
+  const pickupCount = useMemo(() => customers.filter((c) => c.upcomingPickup).length, [customers]);
+  const flaggedTabCount = useMemo(() => customers.filter((c) => c.flaggedCount > 0).length, [customers]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -263,19 +278,6 @@ export default function UsersPage() {
   }
 
   // ── Dashboard view ──
-  const filteredCustomers = useMemo(() => {
-    const list = [...customers];
-    if (customerFilter === "pickup") {
-      return list.filter((c) => c.upcomingPickup).sort((a, b) => (a.upcomingPickup || "").localeCompare(b.upcomingPickup || ""));
-    }
-    if (customerFilter === "flagged") {
-      return list.filter((c) => c.flaggedCount > 0).sort((a, b) => b.flaggedCount - a.flaggedCount);
-    }
-    return list.sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
-  }, [customers, customerFilter]);
-
-  const pickupCount = useMemo(() => customers.filter((c) => c.upcomingPickup).length, [customers]);
-  const flaggedTabCount = useMemo(() => customers.filter((c) => c.flaggedCount > 0).length, [customers]);
 
   const chartData = stats?.dailyStats || [];
   const chartValues = chartData.map((d) =>
