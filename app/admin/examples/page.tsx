@@ -131,9 +131,9 @@ export default function ExamplesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[17px] font-semibold text-stone-800">對話範例</h1>
+          <h1 className="text-[17px] font-semibold text-stone-800">闆娘指令</h1>
           <p className="text-[11px] text-stone-400 mt-0.5">
-            新增後機器人會學習照此模式回應
+            告訴小螞蟻遇到什麼情況該怎麼回答
           </p>
         </div>
         <button
@@ -163,8 +163,8 @@ export default function ExamplesPage() {
 
       {examples.length === 0 && (
         <div className="bg-white rounded-2xl border border-stone-100 py-12 text-center">
-          <p className="text-[13px] font-medium text-stone-600 mb-1">還沒有對話範例</p>
-          <p className="text-[12px] text-stone-400">新增範例來教機器人正確的回應方式</p>
+          <p className="text-[13px] font-medium text-stone-600 mb-1">還沒有設定指令</p>
+          <p className="text-[12px] text-stone-400">新增指令來告訴小螞蟻遇到特定問題該怎麼回答</p>
         </div>
       )}
 
@@ -184,7 +184,7 @@ export default function ExamplesPage() {
                 </span>
               )}
               <div className="flex gap-2.5 items-start">
-                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0 text-right">顧客</span>
+                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0 text-right">情境</span>
                 <div className="flex-1 bg-stone-100 rounded-2xl rounded-tl-md px-3 py-2">
                   <p className="text-[13px] text-stone-700 leading-relaxed">
                     {example.customerMessage}
@@ -197,7 +197,7 @@ export default function ExamplesPage() {
                     {example.correctResponse}
                   </p>
                 </div>
-                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0">機器人</span>
+                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0">回覆</span>
               </div>
               {example.note && (
                 <p className="text-[11px] text-stone-400 italic pl-12">{example.note}</p>
@@ -239,7 +239,7 @@ export default function ExamplesPage() {
           <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden">
             <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-stone-800">
-                {modal.editing.id ? "編輯範例" : "新增範例"}
+                {modal.editing.id ? "編輯指令" : "新增指令"}
               </h3>
               <button
                 onClick={closeModal}
@@ -258,7 +258,7 @@ export default function ExamplesPage() {
             <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
               <div>
                 <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
-                  顧客說的話 *
+                  什麼情況 *
                 </label>
                 <textarea
                   value={modal.editing.customerMessage || ""}
@@ -268,7 +268,7 @@ export default function ExamplesPage() {
                       editing: { ...m.editing!, customerMessage: e.target.value },
                     }))
                   }
-                  placeholder="例如：可以換口味嗎？"
+                  placeholder="例如：顧客問可不可以合併訂單"
                   rows={2}
                   className="w-full border border-stone-200 rounded-xl p-3 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
                 />
@@ -276,7 +276,7 @@ export default function ExamplesPage() {
 
               <div>
                 <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
-                  機器人應該怎麼回 *
+                  小螞蟻要怎麼回 *
                 </label>
                 <textarea
                   value={modal.editing.correctResponse || ""}
@@ -286,7 +286,7 @@ export default function ExamplesPage() {
                       editing: { ...m.editing!, correctResponse: e.target.value },
                     }))
                   }
-                  placeholder="例如：客製化需求幫你轉接闆娘～"
+                  placeholder="例如：可以喔！結帳前跟闆娘說一聲就好～"
                   rows={3}
                   className="w-full border border-stone-200 rounded-xl p-3 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
                 />
@@ -305,7 +305,7 @@ export default function ExamplesPage() {
                       editing: { ...m.editing!, note: e.target.value || null },
                     }))
                   }
-                  placeholder="提醒自己為什麼加這個範例"
+                  placeholder="提醒自己為什麼加這條指令"
                   className="w-full border border-stone-200 rounded-xl p-3 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors"
                 />
               </div>

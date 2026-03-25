@@ -78,7 +78,7 @@ export default function AdminDashboard() {
           {[
             { href: "/admin/products", label: "管理產品", desc: "新增、修改、上下架" },
             { href: "/admin/pickup", label: "取貨預約", desc: "查看預約、設定時段" },
-            { href: "/admin/examples", label: "對話範例", desc: "教機器人正確的回應方式" },
+            { href: "/admin/examples", label: "闆娘指令", desc: "告訴小螞蟻遇到什麼情況該怎麼回答" },
             { href: "/admin/settings", label: "系統設定", desc: "運費、付款、取貨方式等" },
           ].map((item) => (
             <Link

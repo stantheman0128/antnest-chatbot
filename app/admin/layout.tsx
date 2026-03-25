@@ -42,7 +42,7 @@ const navItems = [
   },
   {
     href: "/admin/examples",
-    label: "範例",
+    label: "指令",
     exact: false,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[22px] h-[22px]">

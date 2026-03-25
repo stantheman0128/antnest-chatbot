@@ -88,6 +88,7 @@ function assemblePrompt(
     wrap("security", SECURITY_RULES),
     wrap("mission", get("mission")),
     get("rules") ? `<rules priority="由高到低">\n${get("rules")}\n</rules>` : "",
+    buildOwnerInstructions(examples),
     wrap("format", get("format")),
     wrap("out_of_scope_reply", get("out_of_scope_reply")),
     "<knowledge_base>",
@@ -103,21 +104,20 @@ function assemblePrompt(
     wrap("ordering_process", get("ordering_process")),
     "</knowledge_base>",
     wrap("reminders", get("reminders")),
-    buildExamplesSection(examples),
   ];
 
   return sections.filter(Boolean).join("\n\n");
 }
 
-function buildExamplesSection(examples: ConversationExample[]): string {
+function buildOwnerInstructions(examples: ConversationExample[]): string {
   if (examples.length === 0) return "";
   const body = examples
     .map(
       (e, i) =>
-        `[範例${i + 1}]\n顧客說：「${e.customerMessage}」\n你應該回：「${e.correctResponse}」${e.note ? `\n（備註：${e.note}）` : ""}`
+        `[指令${i + 1}]\n情境：${e.customerMessage}\n回覆：${e.correctResponse}${e.note ? `\n備註：${e.note}` : ""}`
     )
     .join("\n\n");
-  return `<correction_examples>\n以下是真實對話的修正範例，請嚴格遵守：\n\n${body}\n</correction_examples>`;
+  return `<owner_instructions priority="最高">\n以下是闆娘親自設定的回覆指令，優先於其他所有規則。\n當顧客的意圖與下列情境相符時，必須按照指定方式回覆。\n不需要逐字匹配——只要語意相近、問的是同一件事，就適用該指令。\n\n${body}\n</owner_instructions>`;
 }
 
 function wrap(tag: string, content: string): string {
