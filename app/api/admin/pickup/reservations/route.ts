@@ -3,7 +3,7 @@ import { getAllReservations, updateReservationStatus, createReservation, getAvai
 import { verifyAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const date = req.nextUrl.searchParams.get("date") || undefined;
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const { availabilityId, displayName, pickupTime, orderNumber, note, bookingType, flexiblePeriod } = await req.json();
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const { id, status } = await req.json();

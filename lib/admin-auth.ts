@@ -1,46 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabase } from "./supabase";
+import { SignJWT, jwtVerify } from "jose";
+
+const JWT_EXPIRY = "2h";
+
+function getSecret() {
+  const secret = process.env.ADMIN_SECRET;
+  if (!secret) throw new Error("ADMIN_SECRET not configured");
+  return new TextEncoder().encode(secret);
+}
 
 /**
- * Verify admin authentication via Bearer token (Supabase session token).
+ * Verify admin authentication via Bearer JWT token.
  * Returns null if authenticated, or an error response if not.
  */
-export function verifyAdmin(req: NextRequest): NextResponse | null {
+export async function verifyAdmin(req: NextRequest): Promise<NextResponse | null> {
   const authHeader = req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // For now, use a simple admin secret for API auth.
-  // This keeps the admin UI simple without requiring full Supabase Auth setup.
   const token = authHeader.replace("Bearer ", "");
-  const adminSecret = process.env.ADMIN_SECRET;
 
-  if (!adminSecret || token !== adminSecret) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    await jwtVerify(token, getSecret());
+    return null; // Valid
+  } catch {
+    // Fallback: accept raw ADMIN_SECRET for backward compatibility
+    // (cron jobs, existing sessions before JWT migration)
+    if (token === process.env.ADMIN_SECRET) return null;
+    return NextResponse.json({ error: "Token expired or invalid" }, { status: 401 });
   }
-
-  return null;
 }
 
 /**
- * Verify admin login credentials.
- * Returns true if email/password match the configured admin.
+ * Verify admin login credentials and issue a JWT.
  */
-export function verifyAdminLogin(
+export async function verifyAdminLogin(
   email: string,
   password: string
-): { valid: boolean; token?: string } {
+): Promise<{ valid: boolean; token?: string }> {
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
-  const adminSecret = process.env.ADMIN_SECRET;
 
-  if (
-    email === adminEmail &&
-    password === adminPassword &&
-    adminSecret
-  ) {
-    return { valid: true, token: adminSecret };
+  if (email === adminEmail && password === adminPassword) {
+    const token = await new SignJWT({ role: "admin" })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(JWT_EXPIRY)
+      .sign(getSecret());
+    return { valid: true, token };
   }
 
   return { valid: false };

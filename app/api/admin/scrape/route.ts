@@ -282,7 +282,7 @@ function inferBadges(titleForBadge: string, existingBadges: string[]): string[] 
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   try {
@@ -358,7 +358,7 @@ export async function POST(req: NextRequest) {
 
 /** PUT /api/admin/scrape — sync a single product by handle */
 export async function PUT(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   try {

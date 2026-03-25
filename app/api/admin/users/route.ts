@@ -4,7 +4,7 @@ import { getConversationHistory, getConversationStats, getCustomersWithContext, 
 import { generateConversationSummary } from "@/lib/ai-client";
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   // Stats endpoint
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
 /** PATCH: mark an issue as resolved */
 export async function PATCH(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const { logId, resolved } = await req.json();

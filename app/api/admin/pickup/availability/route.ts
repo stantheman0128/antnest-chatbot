@@ -3,13 +3,13 @@ import { getAllAvailabilities, bulkCreateAvailabilities, deleteAvailability } fr
 import { verifyAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
   return NextResponse.json(await getAllAvailabilities());
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const body = await req.json();
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const id = req.nextUrl.searchParams.get("id");

@@ -46,7 +46,7 @@ function checkSuspiciousContent(value: string): string[] {
 }
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const key = req.nextUrl.searchParams.get("key");
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req);
+  const authError = await verifyAdmin(req);
   if (authError) return authError;
 
   const { key, value } = await req.json();

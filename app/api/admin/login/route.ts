@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const result = verifyAdminLogin(email, password);
+  const result = await verifyAdminLogin(email, password);
 
   if (!result.valid) {
     recordFailure(ip);
