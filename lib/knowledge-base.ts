@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getActiveProducts, getConfigMap, getActiveExamples, ProductCard, ConversationExample } from "./data-service";
+import { parseDescription, renderForPrompt } from "./product-description";
 
 /**
  * Build the system prompt dynamically from Supabase data.
@@ -41,6 +42,11 @@ function assemblePrompt(
       const stockLabel = allSoldOut ? "\n庫存狀態：⚠️ 全品項已售完" : "";
 
       if (p.detailedDescription) {
+        const structured = parseDescription(p.detailedDescription);
+        if (structured) {
+          return `<product id="${p.id}">\n名稱：${p.name}\n價格：${p.price}\n${renderForPrompt(structured)}${stockLabel}\n</product>`;
+        }
+        // Legacy plain text: dump as-is
         return `<product id="${p.id}">\n${p.detailedDescription}${stockLabel}\n</product>`;
       }
 

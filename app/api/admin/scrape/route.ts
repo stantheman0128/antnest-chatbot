@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllProducts, upsertProduct, ProductVariant } from "@/lib/data-service";
+import { getAllProducts, getProductById, upsertProduct, ProductVariant } from "@/lib/data-service";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { StructuredDescription, serializeDescription } from "@/lib/product-description";
 
 const CYBERBIZ_BASE = "https://antnest.cyberbiz.co";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
@@ -81,35 +82,73 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** Build a concise detailedDescription from Cyberbiz JSON API data */
-function buildDetailedDescription(jsonData: any): string | null {
-  const parts: string[] = [];
+/** Split spec section text into sub-fields by detecting common headers */
+function parseSpecSection(text: string): { specs: string; storage: string; shelfLife: string; usage: string } {
+  const result = { specs: "", storage: "", shelfLife: "", usage: "" };
 
-  // 1. Product intro from body_html — condensed to first meaningful paragraph
-  const bodyHtml: string = jsonData?.body_html || "";
-  if (bodyHtml) {
-    const bodyText = stripHtml(bodyHtml);
-    // Take the first block (up to first "---" separator or 200 chars)
-    const sepIdx = bodyText.indexOf("---");
-    const intro = sepIdx > 0 ? bodyText.substring(0, sepIdx).trim() : bodyText.substring(0, 200).trim();
-    if (intro) {
-      parts.push(`【商品特色】\n${intro}`);
+  const headers: Array<{ key: keyof typeof result; pattern: RegExp }> = [
+    { key: "storage",   pattern: /保存方式|保存方法/ },
+    { key: "shelfLife",  pattern: /保存期限|賞味期限/ },
+    { key: "usage",     pattern: /食用方式|食用方法|享用方式/ },
+  ];
+
+  // Find all header positions
+  const matches: Array<{ key: keyof typeof result; start: number; headerEnd: number }> = [];
+  for (const { key, pattern } of headers) {
+    const m = text.match(pattern);
+    if (m && m.index !== undefined) {
+      matches.push({ key, start: m.index, headerEnd: m.index + m[0].length });
     }
   }
 
-  // 2. Spec section from other_descriptions — keep verbatim
+  if (matches.length === 0) {
+    result.specs = text.replace(/^-+\s*/gm, "").trim();
+    return result;
+  }
+
+  matches.sort((a, b) => a.start - b.start);
+
+  // Content before first header → specs (e.g. box dimensions)
+  const beforeFirst = text.substring(0, matches[0].start).replace(/^-+\s*/gm, "").replace(/-+\s*$/gm, "").trim();
+  if (beforeFirst) result.specs = beforeFirst;
+
+  // Extract content between consecutive headers
+  for (let i = 0; i < matches.length; i++) {
+    const end = i + 1 < matches.length ? matches[i + 1].start : text.length;
+    const content = text.substring(matches[i].headerEnd, end).replace(/^-+\s*/gm, "").replace(/-+\s*$/gm, "").trim();
+    if (content) result[matches[i].key] = content;
+  }
+
+  return result;
+}
+
+/** Build structured v2 JSON description from Cyberbiz JSON API data */
+function buildDetailedDescription(jsonData: any): string | null {
+  const desc: StructuredDescription = { v: 2, intro: "", specs: "", storage: "", shelfLife: "", usage: "" };
+
+  // 1. Product intro from body_html
+  const bodyHtml: string = jsonData?.body_html || "";
+  if (bodyHtml) {
+    const bodyText = stripHtml(bodyHtml);
+    const sepIdx = bodyText.indexOf("---");
+    desc.intro = (sepIdx > 0 ? bodyText.substring(0, sepIdx).trim() : bodyText.substring(0, 200).trim());
+  }
+
+  // 2. Parse spec section into sub-fields
   const otherDescs: any[] = jsonData?.other_descriptions || [];
   const specSection = otherDescs.find(
     (d: any) => d.setting_name === "product_description_section_spec"
   );
   if (specSection?.body_html) {
     const specText = stripHtml(specSection.body_html);
-    if (specText) {
-      parts.push(`【規格與保存資訊】\n${specText}`);
-    }
+    const parsed = parseSpecSection(specText);
+    desc.specs = parsed.specs;
+    desc.storage = parsed.storage;
+    desc.shelfLife = parsed.shelfLife;
+    desc.usage = parsed.usage;
   }
 
-  return parts.length > 0 ? parts.join("\n\n") : null;
+  return serializeDescription(desc);
 }
 
 /** Scrape a single product: JSON-LD for metadata, JSON API for image */
@@ -313,6 +352,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ added, updated, unchanged, deactivated });
   } catch (error) {
     console.error("Scrape error:", error);
+    return NextResponse.json({ error: "Scrape failed" }, { status: 500 });
+  }
+}
+
+/** PUT /api/admin/scrape — sync a single product by handle */
+export async function PUT(req: NextRequest) {
+  const authError = verifyAdmin(req);
+  if (authError) return authError;
+
+  try {
+    const { handle } = await req.json();
+    if (!handle || typeof handle !== "string") {
+      return NextResponse.json({ error: "handle is required" }, { status: 400 });
+    }
+
+    const scraped = await scrapeProduct(handle);
+    if (!scraped || !scraped.price) {
+      return NextResponse.json({ error: "Product not found on Cyberbiz" }, { status: 404 });
+    }
+
+    const existing = await getProductById(handle);
+    const badges = inferBadges(scraped.titleForBadge, existing?.badges || []);
+
+    await upsertProduct({
+      id: handle,
+      name: scraped.name,
+      price: scraped.price,
+      originalPrice: existing?.originalPrice ?? scraped.originalPrice,
+      description: scraped.description || existing?.description || scraped.name,
+      detailedDescription: scraped.detailedDescription || existing?.detailedDescription || null,
+      imageUrl: scraped.imageUrl || existing?.imageUrl || "",
+      storeUrl: scraped.storeUrl,
+      badges,
+      isActive: existing?.isActive ?? true,
+      sortOrder: existing?.sortOrder ?? 0,
+      temperatureZone: existing?.temperatureZone || null,
+      alcoholFree: existing?.alcoholFree ?? true,
+      variants: scraped.variants,
+    });
+
+    return NextResponse.json({ success: true, product: scraped.name });
+  } catch (error) {
+    console.error("Single product scrape error:", error);
     return NextResponse.json({ error: "Scrape failed" }, { status: 500 });
   }
 }
