@@ -494,12 +494,21 @@ async function handleTextMessage(
     if (carousel) messages.push(carousel);
   }
 
-  await sendMessages(event.replyToken, userId, messages);
+  // Log bot response before sending (so we capture it even if send fails)
   if (userId) {
     const productIds = aiResponse.productSpecs.map((p: any) => p.id);
     logConversation(userId, "bot", aiResponse.text, productIds.length > 0 ? { products: productIds } : undefined);
-    await touchBotActivity(userId);
   }
+
+  try {
+    await sendMessages(event.replyToken, userId, messages);
+  } catch (sendError) {
+    console.error("LINE: Failed to send message:", sendError);
+    // Log the failure for debugging
+    if (userId) logConversation(userId, "bot", "[送出失敗] " + (sendError as Error)?.message, { error: true });
+    return;
+  }
+  if (userId) await touchBotActivity(userId);
 }
 
 async function handlePostback(
