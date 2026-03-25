@@ -879,68 +879,90 @@ export async function getConversationHistory(
 export interface ConversationStats {
   totalUsers: number;
   totalMessages: number;
-  totalBotMessages: number;
-  totalUserMessages: number;
-  todayMessages: number;
+  totalApiCalls: number;
+  avgLatencyMs: number;
+  estimatedTokens: number;
   flaggedCount: number;
-  dailyStats: Array<{ date: string; userMsgs: number; botMsgs: number; flagged: number }>;
+  dailyStats: Array<{
+    date: string;
+    apiCalls: number;
+    avgLatency: number;
+    tokens: number;
+    flagged: number;
+  }>;
 }
 
 export async function getConversationStats(): Promise<ConversationStats> {
   const empty: ConversationStats = {
-    totalUsers: 0, totalMessages: 0, totalBotMessages: 0,
-    totalUserMessages: 0, todayMessages: 0, flaggedCount: 0, dailyStats: [],
+    totalUsers: 0, totalMessages: 0, totalApiCalls: 0,
+    avgLatencyMs: 0, estimatedTokens: 0, flaggedCount: 0, dailyStats: [],
   };
   const sb = getSupabase();
   if (!sb) return empty;
 
   try {
-    // Total users
     const { count: totalUsers } = await sb.from("line_users").select("*", { count: "exact", head: true });
-
-    // Total messages by role
-    const { data: logs } = await sb.from("conversation_logs").select("role, metadata, created_at");
+    const { data: logs } = await sb.from("conversation_logs").select("role, content, metadata, created_at");
     if (!logs) return { ...empty, totalUsers: totalUsers || 0 };
 
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
-    let totalBot = 0, totalUser = 0, todayMsgs = 0, flagged = 0;
+    let totalApiCalls = 0, flagged = 0, totalLatency = 0, latencyCount = 0, totalTokens = 0;
 
     // Daily buckets for last 7 days
-    const dayMap = new Map<string, { userMsgs: number; botMsgs: number; flagged: number }>();
+    const dayMap = new Map<string, { apiCalls: number; latencySum: number; latencyCount: number; tokens: number; flagged: number }>();
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      dayMap.set(d.toISOString().slice(0, 10), { userMsgs: 0, botMsgs: 0, flagged: 0 });
+      dayMap.set(d.toISOString().slice(0, 10), { apiCalls: 0, latencySum: 0, latencyCount: 0, tokens: 0, flagged: 0 });
     }
 
     for (const log of logs) {
-      if (log.role === "bot") totalBot++;
-      else totalUser++;
+      // Estimate tokens: Chinese ~0.5 tokens per char, system prompt ~2350 tokens per API call
+      const contentTokens = Math.ceil((log.content?.length || 0) * 0.5);
 
-      const logDate = (log.created_at || "").slice(0, 10);
-      if (logDate === todayStr) todayMsgs++;
+      if (log.role === "bot") {
+        totalApiCalls++;
+        totalTokens += 2350 + contentTokens; // system prompt + output
+        const lat = log.metadata?.latencyMs;
+        if (typeof lat === "number") {
+          totalLatency += lat;
+          latencyCount++;
+        }
+      } else {
+        totalTokens += contentTokens; // input only
+      }
+
       if (log.metadata?.flagged) flagged++;
 
+      const logDate = (log.created_at || "").slice(0, 10);
       const bucket = dayMap.get(logDate);
       if (bucket) {
-        if (log.role === "bot") bucket.botMsgs++;
-        else bucket.userMsgs++;
+        if (log.role === "bot") {
+          bucket.apiCalls++;
+          bucket.tokens += 2350 + contentTokens;
+          const lat = log.metadata?.latencyMs;
+          if (typeof lat === "number") { bucket.latencySum += lat; bucket.latencyCount++; }
+        } else {
+          bucket.tokens += contentTokens;
+        }
         if (log.metadata?.flagged) bucket.flagged++;
       }
     }
 
-    const dailyStats = [...dayMap.entries()].map(([date, stats]) => ({
+    const dailyStats = [...dayMap.entries()].map(([date, b]) => ({
       date: `${parseInt(date.slice(5, 7))}/${parseInt(date.slice(8, 10))}`,
-      ...stats,
+      apiCalls: b.apiCalls,
+      avgLatency: b.latencyCount > 0 ? Math.round(b.latencySum / b.latencyCount) : 0,
+      tokens: b.tokens,
+      flagged: b.flagged,
     }));
 
     return {
       totalUsers: totalUsers || 0,
       totalMessages: logs.length,
-      totalBotMessages: totalBot,
-      totalUserMessages: totalUser,
-      todayMessages: todayMsgs,
+      totalApiCalls,
+      avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
+      estimatedTokens: totalTokens,
       flaggedCount: flagged,
       dailyStats,
     };
@@ -950,14 +972,87 @@ export async function getConversationStats(): Promise<ConversationStats> {
   }
 }
 
-export async function getUserMessageCount(lineUserId: string): Promise<number> {
+export interface CustomerWithContext {
+  lineUserId: string;
+  displayName: string;
+  pictureUrl: string | null;
+  firstSeen: string;
+  lastSeen: string;
+  messageCount: number;
+  flaggedCount: number;
+  // From reservations
+  upcomingPickup: string | null;
+  orderNumber: string | null;
+  reservationStatus: string | null;
+}
+
+export async function getCustomersWithContext(): Promise<CustomerWithContext[]> {
   const sb = getSupabase();
-  if (!sb) return 0;
+  if (!sb) return [];
   try {
-    const { count } = await sb.from("conversation_logs").select("*", { count: "exact", head: true }).eq("line_user_id", lineUserId);
-    return count || 0;
-  } catch {
-    return 0;
+    // Fetch users
+    const { data: users } = await sb.from("line_users").select("*").order("last_seen", { ascending: false });
+    if (!users) return [];
+
+    // Fetch message counts + flagged counts per user
+    const { data: logs } = await sb.from("conversation_logs").select("line_user_id, metadata");
+    const msgCounts = new Map<string, number>();
+    const flagCounts = new Map<string, number>();
+    for (const log of logs || []) {
+      msgCounts.set(log.line_user_id, (msgCounts.get(log.line_user_id) || 0) + 1);
+      if (log.metadata?.flagged) {
+        flagCounts.set(log.line_user_id, (flagCounts.get(log.line_user_id) || 0) + 1);
+      }
+    }
+
+    // Fetch upcoming reservations (confirmed, future dates)
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: reservations } = await sb
+      .from("reservations")
+      .select("line_user_id, order_number, status, pickup_availability(available_date)")
+      .in("status", ["confirmed", "pending"])
+      .order("created_at", { ascending: false });
+
+    const pickupMap = new Map<string, { date: string; orderNumber: string | null; status: string }>();
+    for (const r of reservations || []) {
+      const date = (r as any).pickup_availability?.available_date;
+      if (date && date >= today && !pickupMap.has(r.line_user_id)) {
+        pickupMap.set(r.line_user_id, { date, orderNumber: r.order_number, status: r.status });
+      }
+    }
+
+    // Combine and sort: upcoming pickups first, then flagged, then recent
+    const customers: CustomerWithContext[] = users.map((u: any) => {
+      const pickup = pickupMap.get(u.line_user_id);
+      return {
+        lineUserId: u.line_user_id,
+        displayName: u.display_name,
+        pictureUrl: u.picture_url || null,
+        firstSeen: u.first_seen,
+        lastSeen: u.last_seen,
+        messageCount: msgCounts.get(u.line_user_id) || 0,
+        flaggedCount: flagCounts.get(u.line_user_id) || 0,
+        upcomingPickup: pickup?.date || null,
+        orderNumber: pickup?.orderNumber || null,
+        reservationStatus: pickup?.status || null,
+      };
+    });
+
+    customers.sort((a, b) => {
+      // Upcoming pickups first
+      if (a.upcomingPickup && !b.upcomingPickup) return -1;
+      if (!a.upcomingPickup && b.upcomingPickup) return 1;
+      // Then flagged (needs attention)
+      if (a.flaggedCount > 0 && b.flaggedCount === 0) return -1;
+      if (a.flaggedCount === 0 && b.flaggedCount > 0) return 1;
+      // Then by recent activity
+      return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
+    });
+
+    return customers;
+  } catch (e: any) {
+    if (e?.code !== "42P01") console.error("getCustomersWithContext error:", e);
+    return [];
   }
 }
 

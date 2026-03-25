@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
-import { getAllLineUsers, getConversationHistory, getConversationStats } from "@/lib/data-service";
+import { getConversationHistory, getConversationStats, getCustomersWithContext } from "@/lib/data-service";
 import { generateConversationSummary } from "@/lib/ai-client";
 
 export async function GET(req: NextRequest) {
@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(history);
   }
 
-  const users = await getAllLineUsers();
-  return NextResponse.json(users);
+  // Default: customers with context (orders, message counts, flagged)
+  const customers = await getCustomersWithContext();
+  return NextResponse.json(customers);
 }
