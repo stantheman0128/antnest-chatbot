@@ -117,17 +117,39 @@ export default function UsersPage() {
 
   // ── Customer detail view (summary cards, not full chat) ──
   if (selectedUser) {
-    // Extract flagged feedback with the bot message that was complained about
+    // Detect issues: explicit feedback + product complaints from message content
+    const COMPLAINT_KEYWORDS = [
+      "壞", "破", "爛", "溢出", "漏", "退冰", "融化", "變質", "發霉", "異味", "臭",
+      "不新鮮", "有問題", "品質", "瑕疵", "損壞", "碎", "裂", "凹", "髒",
+      "少了", "缺", "錯", "不對", "送錯", "寄錯", "沒收到",
+      "退款", "退貨", "客訴", "投訴", "不滿", "失望", "生氣",
+      "🥹", "😡", "😤", "😭",
+    ];
+
     const reversedHistory = [...history].reverse(); // chronological order
-    const flaggedIssues: Array<{ feedback: ConversationLog; botMessage: ConversationLog | null }> = [];
+    const flaggedIssues: Array<{ message: ConversationLog; botResponse: ConversationLog | null; type: "feedback" | "complaint" }> = [];
+    const seenIds = new Set<string>();
+
     for (let i = 0; i < reversedHistory.length; i++) {
-      if (reversedHistory[i].metadata?.flagged) {
-        // Find the most recent bot message before this feedback
+      const log = reversedHistory[i];
+
+      // Explicit feedback button
+      if (log.metadata?.flagged && !seenIds.has(log.id)) {
         let botMsg: ConversationLog | null = null;
         for (let j = i - 1; j >= 0; j--) {
           if (reversedHistory[j].role === "bot") { botMsg = reversedHistory[j]; break; }
         }
-        flaggedIssues.push({ feedback: reversedHistory[i], botMessage: botMsg });
+        flaggedIssues.push({ message: log, botResponse: botMsg, type: "feedback" });
+        seenIds.add(log.id);
+      }
+
+      // Product complaint detected from message content
+      if (log.role === "user" && !log.metadata?.flagged && !seenIds.has(log.id)) {
+        const text = log.content || "";
+        if (COMPLAINT_KEYWORDS.some((kw) => text.includes(kw))) {
+          flaggedIssues.push({ message: log, botResponse: null, type: "complaint" });
+          seenIds.add(log.id);
+        }
       }
     }
     // Last 3 user messages for quick glance
@@ -188,22 +210,32 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Flagged issues — show the bot response that was complained about */}
+        {/* Issues — explicit feedback + auto-detected product complaints */}
         {flaggedIssues.length > 0 && (
           <div className="bg-white rounded-2xl border border-red-100 p-4">
             <p className="text-[10px] font-semibold text-red-500 mb-2">⚠️ 問題回饋（{flaggedIssues.length}）</p>
             <div className="space-y-3">
-              {flaggedIssues.map(({ feedback, botMessage }) => (
-                <div key={feedback.id} className="bg-red-50 rounded-xl px-3 py-2.5 space-y-2">
-                  {botMessage && (
+              {flaggedIssues.map(({ message, botResponse, type }) => (
+                <div key={message.id} className="bg-red-50 rounded-xl px-3 py-2.5 space-y-2">
+                  {type === "feedback" && botResponse && (
                     <div>
                       <p className="text-[10px] text-red-400 mb-1">小螞蟻回覆：</p>
-                      <p className="text-[12px] text-stone-600 line-clamp-3">{botMessage.content}</p>
+                      <p className="text-[12px] text-stone-600 line-clamp-3">{botResponse.content}</p>
+                    </div>
+                  )}
+                  {type === "complaint" && (
+                    <div>
+                      <p className="text-[10px] text-red-400 mb-1">顧客反映：</p>
+                      <p className="text-[12px] text-stone-700">{message.content}</p>
                     </div>
                   )}
                   <div className="flex items-center justify-between pt-1 border-t border-red-100">
-                    <p className="text-[10px] text-red-500">顧客表示不滿意</p>
-                    <p className="text-[10px] text-red-400">{formatTime(feedback.createdAt)}</p>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      type === "feedback" ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
+                    }`}>
+                      {type === "feedback" ? "回答不滿意" : "產品問題"}
+                    </span>
+                    <p className="text-[10px] text-red-400">{formatTime(message.createdAt)}</p>
                   </div>
                 </div>
               ))}

@@ -994,13 +994,16 @@ export async function getCustomersWithContext(): Promise<CustomerWithContext[]> 
     const { data: users } = await sb.from("line_users").select("*").order("last_seen", { ascending: false });
     if (!users) return [];
 
-    // Fetch message counts + flagged counts per user
-    const { data: logs } = await sb.from("conversation_logs").select("line_user_id, metadata");
+    // Fetch message counts + issue counts per user (explicit flags + complaint keywords)
+    const COMPLAINT_KEYWORDS = ["壞","破","爛","溢出","漏","退冰","融化","變質","發霉","異味","不新鮮","有問題","品質","瑕疵","損壞","少了","缺","送錯","寄錯","沒收到","退款","退貨","客訴","投訴","不滿","失望"];
+    const { data: logs } = await sb.from("conversation_logs").select("line_user_id, role, content, metadata");
     const msgCounts = new Map<string, number>();
     const flagCounts = new Map<string, number>();
     for (const log of logs || []) {
       msgCounts.set(log.line_user_id, (msgCounts.get(log.line_user_id) || 0) + 1);
-      if (log.metadata?.flagged) {
+      const isFlagged = log.metadata?.flagged;
+      const isComplaint = log.role === "user" && !isFlagged && COMPLAINT_KEYWORDS.some((kw: string) => (log.content || "").includes(kw));
+      if (isFlagged || isComplaint) {
         flagCounts.set(log.line_user_id, (flagCounts.get(log.line_user_id) || 0) + 1);
       }
     }
