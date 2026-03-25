@@ -421,7 +421,7 @@ export async function generateConversationSummary(
     const response = await withTimeout(
       model.generateContent({
         contents: [{ role: "user", parts: [{ text: conversationText }] }],
-        generationConfig: { maxOutputTokens: 100, temperature: 0.3 },
+        generationConfig: { maxOutputTokens: 2048, temperature: 0.3 },
       }),
       20000,
       "summary"
