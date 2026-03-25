@@ -57,11 +57,59 @@ interface ScrapedProduct {
   price: string;
   originalPrice: string | null;
   description: string;
+  detailedDescription: string | null;
   imageUrl: string;
   storeUrl: string;
   inStock: boolean;
   titleForBadge: string;
   variants: ProductVariant[];
+}
+
+/** Strip HTML tags and collapse whitespace */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|li|ul|ol|div|h[1-6]|section)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Build a concise detailedDescription from Cyberbiz JSON API data */
+function buildDetailedDescription(jsonData: any): string | null {
+  const parts: string[] = [];
+
+  // 1. Product intro from body_html — condensed to first meaningful paragraph
+  const bodyHtml: string = jsonData?.body_html || "";
+  if (bodyHtml) {
+    const bodyText = stripHtml(bodyHtml);
+    // Take the first block (up to first "---" separator or 200 chars)
+    const sepIdx = bodyText.indexOf("---");
+    const intro = sepIdx > 0 ? bodyText.substring(0, sepIdx).trim() : bodyText.substring(0, 200).trim();
+    if (intro) {
+      parts.push(`【商品特色】\n${intro}`);
+    }
+  }
+
+  // 2. Spec section from other_descriptions — keep verbatim
+  const otherDescs: any[] = jsonData?.other_descriptions || [];
+  const specSection = otherDescs.find(
+    (d: any) => d.setting_name === "product_description_section_spec"
+  );
+  if (specSection?.body_html) {
+    const specText = stripHtml(specSection.body_html);
+    if (specText) {
+      parts.push(`【規格與保存資訊】\n${specText}`);
+    }
+  }
+
+  return parts.length > 0 ? parts.join("\n\n") : null;
 }
 
 /** Scrape a single product: JSON-LD for metadata, JSON API for image */
@@ -167,11 +215,15 @@ async function scrapeProduct(handle: string): Promise<ScrapedProduct | null> {
         : "";
     }
 
+    // Build detailed description from JSON API data (body_html + other_descriptions)
+    const detailedDescription = jsonData ? buildDetailedDescription(jsonData) : null;
+
     return {
       name: ld.name || handle,
       price,
       originalPrice: null,
       description: (ld.description || "").slice(0, 120),
+      detailedDescription,
       imageUrl,
       storeUrl: ld.offers?.url || `${CYBERBIZ_BASE}/products/${handle}`,
       inStock: ld.offers?.availability?.includes("InStock") ?? true,
@@ -235,7 +287,7 @@ export async function POST(req: NextRequest) {
         price: scraped.price,
         originalPrice: existing?.originalPrice ?? scraped.originalPrice,
         description: scraped.description || existing?.description || scraped.name,
-        detailedDescription: existing?.detailedDescription || null,
+        detailedDescription: scraped.detailedDescription || existing?.detailedDescription || null,
         imageUrl: scraped.imageUrl || existing?.imageUrl || "",
         storeUrl: scraped.storeUrl,
         badges,
