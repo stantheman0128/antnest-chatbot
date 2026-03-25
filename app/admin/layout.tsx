@@ -6,19 +6,6 @@ import Link from "next/link";
 
 const navItems = [
   {
-    href: "/admin",
-    label: "總覽",
-    exact: true,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[22px] h-[22px]">
-        <rect x="3" y="3" width="7" height="7" rx="1"/>
-        <rect x="14" y="3" width="7" height="7" rx="1"/>
-        <rect x="14" y="14" width="7" height="7" rx="1"/>
-        <rect x="3" y="14" width="7" height="7" rx="1"/>
-      </svg>
-    ),
-  },
-  {
     href: "/admin/products",
     label: "產品",
     exact: false,
