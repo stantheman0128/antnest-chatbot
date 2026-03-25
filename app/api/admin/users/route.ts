@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
-import { getConversationHistory, getConversationStats, getCustomersWithContext } from "@/lib/data-service";
+import { getConversationHistory, getConversationStats, getCustomersWithContext, resolveIssue } from "@/lib/data-service";
 import { generateConversationSummary } from "@/lib/ai-client";
 
 export async function GET(req: NextRequest) {
@@ -35,4 +35,16 @@ export async function GET(req: NextRequest) {
   // Default: customers with context (orders, message counts, flagged)
   const customers = await getCustomersWithContext();
   return NextResponse.json(customers);
+}
+
+/** PATCH: mark an issue as resolved */
+export async function PATCH(req: NextRequest) {
+  const authError = verifyAdmin(req);
+  if (authError) return authError;
+
+  const { logId, resolved } = await req.json();
+  if (!logId) return NextResponse.json({ error: "logId required" }, { status: 400 });
+
+  const ok = await resolveIssue(logId, resolved !== false);
+  return ok ? NextResponse.json({ success: true }) : NextResponse.json({ error: "Failed" }, { status: 500 });
 }

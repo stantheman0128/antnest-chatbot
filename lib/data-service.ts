@@ -876,6 +876,20 @@ export async function getConversationHistory(
   }
 }
 
+export async function resolveIssue(logId: string, resolved: boolean): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  try {
+    // Fetch current metadata, merge resolved flag
+    const { data } = await sb.from("conversation_logs").select("metadata").eq("id", logId).single();
+    const metadata = { ...(data?.metadata || {}), resolved };
+    const { error } = await sb.from("conversation_logs").update({ metadata }).eq("id", logId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export interface ConversationStats {
   totalUsers: number;
   totalMessages: number;

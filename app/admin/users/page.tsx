@@ -115,45 +115,50 @@ export default function UsersPage() {
     );
   }
 
-  // ── Customer detail view (summary cards, not full chat) ──
+  // ── Customer detail view ──
   if (selectedUser) {
-    // Detect issues: explicit feedback + product complaints from message content
     const COMPLAINT_KEYWORDS = [
-      "壞", "破", "爛", "溢出", "漏", "退冰", "融化", "變質", "發霉", "異味", "臭",
-      "不新鮮", "有問題", "品質", "瑕疵", "損壞", "碎", "裂", "凹", "髒",
-      "少了", "缺", "錯", "不對", "送錯", "寄錯", "沒收到",
-      "退款", "退貨", "客訴", "投訴", "不滿", "失望", "生氣",
-      "🥹", "😡", "😤", "😭",
+      "壞","破","爛","溢出","漏","退冰","融化","變質","發霉","異味","臭",
+      "不新鮮","有問題","品質","瑕疵","損壞","碎","裂","凹","髒",
+      "少了","缺","錯","不對","送錯","寄錯","沒收到",
+      "退款","退貨","客訴","投訴","不滿","失望","生氣","🥹","😡","😤","😭",
     ];
 
-    const reversedHistory = [...history].reverse(); // chronological order
-    const flaggedIssues: Array<{ message: ConversationLog; botResponse: ConversationLog | null; type: "feedback" | "complaint" }> = [];
+    // Build issues list from history
+    const chronological = [...history].reverse();
+    const allIssues: Array<{ id: string; content: string; context: string; type: "feedback" | "complaint"; resolved: boolean; time: string }> = [];
     const seenIds = new Set<string>();
 
-    for (let i = 0; i < reversedHistory.length; i++) {
-      const log = reversedHistory[i];
-
-      // Explicit feedback button
+    for (let i = 0; i < chronological.length; i++) {
+      const log = chronological[i];
       if (log.metadata?.flagged && !seenIds.has(log.id)) {
-        let botMsg: ConversationLog | null = null;
+        let ctx = "";
         for (let j = i - 1; j >= 0; j--) {
-          if (reversedHistory[j].role === "bot") { botMsg = reversedHistory[j]; break; }
+          if (chronological[j].role === "bot") { ctx = chronological[j].content; break; }
         }
-        flaggedIssues.push({ message: log, botResponse: botMsg, type: "feedback" });
+        allIssues.push({ id: log.id, content: "回答不滿意", context: ctx, type: "feedback", resolved: !!log.metadata?.resolved, time: log.createdAt });
         seenIds.add(log.id);
       }
-
-      // Product complaint detected from message content
       if (log.role === "user" && !log.metadata?.flagged && !seenIds.has(log.id)) {
-        const text = log.content || "";
-        if (COMPLAINT_KEYWORDS.some((kw) => text.includes(kw))) {
-          flaggedIssues.push({ message: log, botResponse: null, type: "complaint" });
+        if (COMPLAINT_KEYWORDS.some((kw) => (log.content || "").includes(kw))) {
+          allIssues.push({ id: log.id, content: log.content, context: "", type: "complaint", resolved: !!log.metadata?.resolved, time: log.createdAt });
           seenIds.add(log.id);
         }
       }
     }
-    // Last 3 user messages for quick glance
-    const recentUserMsgs = history.filter((l) => l.role === "user" && !l.metadata?.flagged).slice(0, 3);
+
+    const openIssues = allIssues.filter((i) => !i.resolved);
+    const resolvedIssues = allIssues.filter((i) => i.resolved);
+
+    async function toggleResolved(logId: string, resolved: boolean) {
+      await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ logId, resolved }),
+      });
+      // Update local history metadata
+      setHistory((prev) => prev.map((l) => l.id === logId ? { ...l, metadata: { ...l.metadata, resolved } } : l));
+    }
 
     return (
       <div className="space-y-3">
@@ -162,80 +167,56 @@ export default function UsersPage() {
           ← 返回
         </button>
 
-        {/* Profile card */}
-        <div className="bg-white rounded-2xl border border-stone-100 p-4">
+        {/* Profile + AI summary combined */}
+        <div className="bg-white rounded-2xl border border-stone-100 p-4 space-y-3">
           <div className="flex items-center gap-3">
             {selectedUser.pictureUrl ? (
-              <img src={selectedUser.pictureUrl} alt="" className="w-12 h-12 rounded-full" />
+              <img src={selectedUser.pictureUrl} alt="" className="w-11 h-11 rounded-full" />
             ) : (
-              <div className="w-12 h-12 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 text-[16px]">👤</div>
+              <div className="w-11 h-11 rounded-full bg-stone-200 flex items-center justify-center text-stone-400">👤</div>
             )}
             <div className="flex-1">
-              <p className="text-[16px] font-semibold text-stone-800">{selectedUser.displayName}</p>
-              <p className="text-[11px] text-stone-400 mt-0.5">
-                {selectedUser.messageCount} 則訊息 · 首次 {formatTime(selectedUser.firstSeen)} · 最近 {timeAgo(selectedUser.lastSeen)}
+              <p className="text-[15px] font-semibold text-stone-800">{selectedUser.displayName}</p>
+              <p className="text-[11px] text-stone-400">
+                {selectedUser.messageCount} 則 · {timeAgo(selectedUser.lastSeen)}
+                {selectedUser.upcomingPickup && ` · 📦 ${selectedUser.upcomingPickup}`}
               </p>
             </div>
           </div>
-        </div>
-
-        {/* AI Summary */}
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-100 px-4 py-3">
-          <p className="text-[10px] font-semibold text-amber-600 mb-1.5">AI 對話摘要</p>
-          {loadingSummary ? (
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full border-2 border-amber-600 border-t-transparent animate-spin" />
-              <p className="text-[13px] text-amber-700">分析中...</p>
-            </div>
-          ) : (
-            <p className="text-[13px] text-amber-900 leading-relaxed">{summary || "尚無對話紀錄"}</p>
-          )}
-        </div>
-
-        {/* Pickup / Order info */}
-        {selectedUser.upcomingPickup && (
-          <div className="bg-white rounded-2xl border border-stone-100 p-4">
-            <p className="text-[10px] font-semibold text-stone-400 mb-2">📦 取貨 / 訂單</p>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[14px] font-medium text-stone-800">{selectedUser.upcomingPickup}</p>
-                {selectedUser.orderNumber && <p className="text-[11px] text-stone-400 mt-0.5">訂單 {selectedUser.orderNumber}</p>}
-              </div>
-              <span className={`text-[11px] px-2 py-0.5 rounded-full ${
-                selectedUser.reservationStatus === "confirmed" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"
-              }`}>
-                {selectedUser.reservationStatus === "confirmed" ? "已確認" : "待確認"}
-              </span>
-            </div>
+          {/* AI summary inline */}
+          <div className="bg-amber-50 rounded-xl px-3 py-2">
+            {loadingSummary ? (
+              <p className="text-[12px] text-amber-700 animate-pulse">摘要分析中...</p>
+            ) : (
+              <p className="text-[12px] text-amber-900">{summary || "尚無對話紀錄"}</p>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Issues — explicit feedback + auto-detected product complaints */}
-        {flaggedIssues.length > 0 && (
+        {/* Open issues */}
+        {openIssues.length > 0 && (
           <div className="bg-white rounded-2xl border border-red-100 p-4">
-            <p className="text-[10px] font-semibold text-red-500 mb-2">⚠️ 問題回饋（{flaggedIssues.length}）</p>
-            <div className="space-y-3">
-              {flaggedIssues.map(({ message, botResponse, type }) => (
-                <div key={message.id} className="bg-red-50 rounded-xl px-3 py-2.5 space-y-2">
-                  {type === "feedback" && botResponse && (
-                    <div>
-                      <p className="text-[10px] text-red-400 mb-1">小螞蟻回覆：</p>
-                      <p className="text-[12px] text-stone-600 line-clamp-3">{botResponse.content}</p>
+            <p className="text-[10px] font-semibold text-red-500 mb-2.5">待處理（{openIssues.length}）</p>
+            <div className="space-y-2">
+              {openIssues.map((issue) => (
+                <div key={issue.id} className="flex items-start gap-2.5">
+                  <button
+                    onClick={() => toggleResolved(issue.id, true)}
+                    className="mt-0.5 w-4.5 h-4.5 shrink-0 rounded border-2 border-stone-300 hover:border-amber-600 transition-colors flex items-center justify-center"
+                    style={{ width: "18px", height: "18px" }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                        issue.type === "feedback" ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
+                      }`}>
+                        {issue.type === "feedback" ? "回答問題" : "產品問題"}
+                      </span>
+                      <span className="text-[9px] text-stone-400">{formatTime(issue.time)}</span>
                     </div>
-                  )}
-                  {type === "complaint" && (
-                    <div>
-                      <p className="text-[10px] text-red-400 mb-1">顧客反映：</p>
-                      <p className="text-[12px] text-stone-700">{message.content}</p>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between pt-1 border-t border-red-100">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      type === "feedback" ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
-                    }`}>
-                      {type === "feedback" ? "回答不滿意" : "產品問題"}
-                    </span>
-                    <p className="text-[10px] text-red-400">{formatTime(message.createdAt)}</p>
+                    <p className="text-[12px] text-stone-700 line-clamp-2">
+                      {issue.type === "complaint" ? issue.content : issue.context || issue.content}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -243,18 +224,45 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Recent questions (quick glance) */}
-        {recentUserMsgs.length > 0 && (
-          <div className="bg-white rounded-2xl border border-stone-100 p-4">
-            <p className="text-[10px] font-semibold text-stone-400 mb-2">最近詢問</p>
-            <div className="space-y-1.5">
-              {recentUserMsgs.map((log) => (
-                <div key={log.id} className="flex items-start gap-2">
-                  <span className="text-[10px] text-stone-300 shrink-0 pt-0.5">{formatTime(log.createdAt)}</span>
-                  <p className="text-[12px] text-stone-600 line-clamp-1">{log.content}</p>
+        {/* Resolved issues (collapsed) */}
+        {resolvedIssues.length > 0 && (
+          <details className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
+            <summary className="px-4 py-3 text-[10px] font-semibold text-stone-400 cursor-pointer hover:bg-stone-50 transition-colors">
+              已解決（{resolvedIssues.length}）
+            </summary>
+            <div className="px-4 pb-3 space-y-2">
+              {resolvedIssues.map((issue) => (
+                <div key={issue.id} className="flex items-start gap-2.5 opacity-60">
+                  <button
+                    onClick={() => toggleResolved(issue.id, false)}
+                    className="mt-0.5 shrink-0 rounded border-2 border-amber-600 bg-amber-600 flex items-center justify-center"
+                    style={{ width: "18px", height: "18px" }}
+                  >
+                    <svg viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2" className="w-2.5 h-2.5">
+                      <path d="M2 6l3 3 5-5" />
+                    </svg>
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-400">
+                        {issue.type === "feedback" ? "回答問題" : "產品問題"}
+                      </span>
+                      <span className="text-[9px] text-stone-400">{formatTime(issue.time)}</span>
+                    </div>
+                    <p className="text-[12px] text-stone-400 line-clamp-1 line-through">
+                      {issue.type === "complaint" ? issue.content : issue.context || issue.content}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
+          </details>
+        )}
+
+        {/* No issues */}
+        {allIssues.length === 0 && (
+          <div className="bg-white rounded-2xl border border-stone-100 px-4 py-6 text-center">
+            <p className="text-[12px] text-stone-400">沒有問題回饋紀錄</p>
           </div>
         )}
       </div>
