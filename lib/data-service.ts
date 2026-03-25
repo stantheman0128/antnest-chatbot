@@ -876,6 +876,91 @@ export async function getConversationHistory(
   }
 }
 
+export interface ConversationStats {
+  totalUsers: number;
+  totalMessages: number;
+  totalBotMessages: number;
+  totalUserMessages: number;
+  todayMessages: number;
+  flaggedCount: number;
+  dailyStats: Array<{ date: string; userMsgs: number; botMsgs: number; flagged: number }>;
+}
+
+export async function getConversationStats(): Promise<ConversationStats> {
+  const empty: ConversationStats = {
+    totalUsers: 0, totalMessages: 0, totalBotMessages: 0,
+    totalUserMessages: 0, todayMessages: 0, flaggedCount: 0, dailyStats: [],
+  };
+  const sb = getSupabase();
+  if (!sb) return empty;
+
+  try {
+    // Total users
+    const { count: totalUsers } = await sb.from("line_users").select("*", { count: "exact", head: true });
+
+    // Total messages by role
+    const { data: logs } = await sb.from("conversation_logs").select("role, metadata, created_at");
+    if (!logs) return { ...empty, totalUsers: totalUsers || 0 };
+
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    let totalBot = 0, totalUser = 0, todayMsgs = 0, flagged = 0;
+
+    // Daily buckets for last 7 days
+    const dayMap = new Map<string, { userMsgs: number; botMsgs: number; flagged: number }>();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      dayMap.set(d.toISOString().slice(0, 10), { userMsgs: 0, botMsgs: 0, flagged: 0 });
+    }
+
+    for (const log of logs) {
+      if (log.role === "bot") totalBot++;
+      else totalUser++;
+
+      const logDate = (log.created_at || "").slice(0, 10);
+      if (logDate === todayStr) todayMsgs++;
+      if (log.metadata?.flagged) flagged++;
+
+      const bucket = dayMap.get(logDate);
+      if (bucket) {
+        if (log.role === "bot") bucket.botMsgs++;
+        else bucket.userMsgs++;
+        if (log.metadata?.flagged) bucket.flagged++;
+      }
+    }
+
+    const dailyStats = [...dayMap.entries()].map(([date, stats]) => ({
+      date: `${parseInt(date.slice(5, 7))}/${parseInt(date.slice(8, 10))}`,
+      ...stats,
+    }));
+
+    return {
+      totalUsers: totalUsers || 0,
+      totalMessages: logs.length,
+      totalBotMessages: totalBot,
+      totalUserMessages: totalUser,
+      todayMessages: todayMsgs,
+      flaggedCount: flagged,
+      dailyStats,
+    };
+  } catch (e: any) {
+    if (e?.code !== "42P01") console.error("getConversationStats error:", e);
+    return empty;
+  }
+}
+
+export async function getUserMessageCount(lineUserId: string): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+  try {
+    const { count } = await sb.from("conversation_logs").select("*", { count: "exact", head: true }).eq("line_user_id", lineUserId);
+    return count || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ── DB → App Type Mapping ──────────────────────────────
 
 function mapDbProduct(row: any): ProductCard {

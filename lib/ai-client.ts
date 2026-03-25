@@ -397,3 +397,39 @@ export async function generateAIResponse(
 
   return FALLBACK;
 }
+
+/**
+ * Generate a one-line summary of a customer's recent conversation.
+ * Used in admin dashboard to quickly understand what a customer is asking about.
+ */
+export async function generateConversationSummary(
+  messages: Array<{ role: string; content: string }>
+): Promise<string> {
+  if (messages.length === 0) return "尚無對話紀錄";
+
+  try {
+    const genAI = getAIClient();
+    const model = genAI.getGenerativeModel({
+      model: DEFAULT_MODEL,
+      systemInstruction: "你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。",
+    });
+
+    const conversationText = messages
+      .map((m) => (m.role === "user" ? "顧客：" : "客服：") + m.content)
+      .join("\n");
+
+    const response = await withTimeout(
+      model.generateContent({
+        contents: [{ role: "user", parts: [{ text: conversationText }] }],
+        generationConfig: { maxOutputTokens: 100, temperature: 0.3 },
+      }),
+      8000,
+      "summary"
+    );
+
+    return response.response.text()?.trim() || "無法生成摘要";
+  } catch (e: any) {
+    console.error("generateConversationSummary error:", e?.message);
+    return "摘要生成失敗";
+  }
+}
