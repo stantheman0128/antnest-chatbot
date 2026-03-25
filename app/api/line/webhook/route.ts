@@ -413,10 +413,9 @@ async function handleTextMessage(
     }
   }
 
-  // Always-respond list: env var (devs) + admin-managed user IDs
-  const devIds = (process.env.DEV_LINE_USER_IDS || "").split(",").map((id) => id.trim()).filter(Boolean);
+  // Always-respond list: managed from admin settings (system_config)
   const autoRespondIds = ((await getConfig("auto_respond_user_ids")) || "").split(/[\n,]/).map((id) => id.trim()).filter(Boolean);
-  const alwaysRespond = userId ? (devIds.includes(userId) || autoRespondIds.includes(userId)) : false;
+  const alwaysRespond = userId ? autoRespondIds.includes(userId) : false;
 
   // Bot is opt-in — only respond if user has activated it (always-respond list bypasses)
   if (!alwaysRespond && (!userId || !(await isUserActive(userId)))) {
