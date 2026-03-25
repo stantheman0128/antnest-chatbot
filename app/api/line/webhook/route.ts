@@ -436,18 +436,6 @@ async function handleTextMessage(
     return;
   }
 
-  // Show typing indicator while AI generates response
-  if (userId) {
-    fetch("https://api.line.me/v2/bot/chat/loading", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-      },
-      body: JSON.stringify({ chatId: userId, loadingSeconds: 20 }),
-    }).catch(() => {});
-  }
-
   // Refresh stock from CYBERBIZ if stale and user is asking about availability
   if (isStockQuery(userMessage)) {
     await refreshStockIfStale();
