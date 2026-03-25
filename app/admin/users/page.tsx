@@ -115,16 +115,21 @@ export default function UsersPage() {
     );
   }
 
-  // ── Customer detail view ──
+  // ── Customer detail view (summary cards, not full chat) ──
   if (selectedUser) {
+    // Extract flagged messages from history
+    const flaggedMessages = history.filter((l) => l.metadata?.flagged);
+    // Last 3 user messages for quick glance
+    const recentUserMsgs = history.filter((l) => l.role === "user" && !l.metadata?.flagged).slice(0, 3);
+
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <button onClick={() => { setSelectedUser(null); setHistory([]); setSummary(null); }}
           className="flex items-center gap-1 text-[13px] text-amber-600 hover:text-amber-800">
           ← 返回
         </button>
 
-        {/* Profile header */}
+        {/* Profile card */}
         <div className="bg-white rounded-2xl border border-stone-100 p-4">
           <div className="flex items-center gap-3">
             {selectedUser.pictureUrl ? (
@@ -134,27 +139,11 @@ export default function UsersPage() {
             )}
             <div className="flex-1">
               <p className="text-[16px] font-semibold text-stone-800">{selectedUser.displayName}</p>
-              <div className="flex items-center gap-3 mt-0.5">
-                <p className="text-[11px] text-stone-400">{selectedUser.messageCount} 則訊息</p>
-                <p className="text-[11px] text-stone-400">首次：{formatTime(selectedUser.firstSeen)}</p>
-              </div>
-            </div>
-          </div>
-          {/* Order info */}
-          {selectedUser.upcomingPickup && (
-            <div className="mt-3 bg-amber-50 rounded-xl px-3 py-2">
-              <p className="text-[11px] text-amber-700">
-                📦 近期取貨：{selectedUser.upcomingPickup}
-                {selectedUser.orderNumber && ` | 訂單 ${selectedUser.orderNumber}`}
-                {selectedUser.reservationStatus && ` | ${selectedUser.reservationStatus === "confirmed" ? "已確認" : "待確認"}`}
+              <p className="text-[11px] text-stone-400 mt-0.5">
+                {selectedUser.messageCount} 則訊息 · 首次 {formatTime(selectedUser.firstSeen)} · 最近 {timeAgo(selectedUser.lastSeen)}
               </p>
             </div>
-          )}
-          {selectedUser.flaggedCount > 0 && (
-            <div className="mt-2 bg-red-50 rounded-xl px-3 py-2">
-              <p className="text-[11px] text-red-600">⚠️ {selectedUser.flaggedCount} 則不滿意回報</p>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* AI Summary */}
@@ -170,31 +159,51 @@ export default function UsersPage() {
           )}
         </div>
 
-        {/* Conversation */}
-        {loadingHistory ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-5 h-5 rounded-full border-2 border-amber-800 border-t-transparent animate-spin" />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {[...history].reverse().map((log) => (
-              <div key={log.id} className={`flex ${log.role === "user" ? "justify-start" : "justify-end"}`}>
-                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 ${
-                  log.metadata?.flagged ? "bg-red-50 border-2 border-red-200 rounded-tl-md"
-                    : log.role === "user" ? "bg-stone-100 rounded-tl-md"
-                    : "bg-amber-50 rounded-tr-md"
-                }`}>
-                  {log.metadata?.flagged && <p className="text-[10px] text-red-500 font-semibold mb-1">不滿意回報</p>}
-                  <p className={`text-[13px] leading-relaxed whitespace-pre-wrap ${log.role === "user" ? "text-stone-700" : "text-amber-900"}`}>
-                    {log.content}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-[10px] text-stone-300">{formatTime(log.createdAt)}</p>
-                    {log.metadata?.latencyMs && <p className="text-[10px] text-stone-300">{(log.metadata.latencyMs / 1000).toFixed(1)}s</p>}
-                  </div>
-                </div>
+        {/* Pickup / Order info */}
+        {selectedUser.upcomingPickup && (
+          <div className="bg-white rounded-2xl border border-stone-100 p-4">
+            <p className="text-[10px] font-semibold text-stone-400 mb-2">📦 取貨 / 訂單</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[14px] font-medium text-stone-800">{selectedUser.upcomingPickup}</p>
+                {selectedUser.orderNumber && <p className="text-[11px] text-stone-400 mt-0.5">訂單 {selectedUser.orderNumber}</p>}
               </div>
-            ))}
+              <span className={`text-[11px] px-2 py-0.5 rounded-full ${
+                selectedUser.reservationStatus === "confirmed" ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"
+              }`}>
+                {selectedUser.reservationStatus === "confirmed" ? "已確認" : "待確認"}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Flagged issues */}
+        {flaggedMessages.length > 0 && (
+          <div className="bg-white rounded-2xl border border-red-100 p-4">
+            <p className="text-[10px] font-semibold text-red-500 mb-2">⚠️ 問題回饋（{flaggedMessages.length}）</p>
+            <div className="space-y-2">
+              {flaggedMessages.map((log) => (
+                <div key={log.id} className="bg-red-50 rounded-xl px-3 py-2">
+                  <p className="text-[12px] text-red-700">{log.content}</p>
+                  <p className="text-[10px] text-red-400 mt-1">{formatTime(log.createdAt)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent questions (quick glance) */}
+        {recentUserMsgs.length > 0 && (
+          <div className="bg-white rounded-2xl border border-stone-100 p-4">
+            <p className="text-[10px] font-semibold text-stone-400 mb-2">最近詢問</p>
+            <div className="space-y-1.5">
+              {recentUserMsgs.map((log) => (
+                <div key={log.id} className="flex items-start gap-2">
+                  <span className="text-[10px] text-stone-300 shrink-0 pt-0.5">{formatTime(log.createdAt)}</span>
+                  <p className="text-[12px] text-stone-600 line-clamp-1">{log.content}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
