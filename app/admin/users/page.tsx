@@ -117,8 +117,19 @@ export default function UsersPage() {
 
   // ── Customer detail view (summary cards, not full chat) ──
   if (selectedUser) {
-    // Extract flagged messages from history
-    const flaggedMessages = history.filter((l) => l.metadata?.flagged);
+    // Extract flagged feedback with the bot message that was complained about
+    const reversedHistory = [...history].reverse(); // chronological order
+    const flaggedIssues: Array<{ feedback: ConversationLog; botMessage: ConversationLog | null }> = [];
+    for (let i = 0; i < reversedHistory.length; i++) {
+      if (reversedHistory[i].metadata?.flagged) {
+        // Find the most recent bot message before this feedback
+        let botMsg: ConversationLog | null = null;
+        for (let j = i - 1; j >= 0; j--) {
+          if (reversedHistory[j].role === "bot") { botMsg = reversedHistory[j]; break; }
+        }
+        flaggedIssues.push({ feedback: reversedHistory[i], botMessage: botMsg });
+      }
+    }
     // Last 3 user messages for quick glance
     const recentUserMsgs = history.filter((l) => l.role === "user" && !l.metadata?.flagged).slice(0, 3);
 
@@ -177,15 +188,23 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Flagged issues */}
-        {flaggedMessages.length > 0 && (
+        {/* Flagged issues — show the bot response that was complained about */}
+        {flaggedIssues.length > 0 && (
           <div className="bg-white rounded-2xl border border-red-100 p-4">
-            <p className="text-[10px] font-semibold text-red-500 mb-2">⚠️ 問題回饋（{flaggedMessages.length}）</p>
-            <div className="space-y-2">
-              {flaggedMessages.map((log) => (
-                <div key={log.id} className="bg-red-50 rounded-xl px-3 py-2">
-                  <p className="text-[12px] text-red-700">{log.content}</p>
-                  <p className="text-[10px] text-red-400 mt-1">{formatTime(log.createdAt)}</p>
+            <p className="text-[10px] font-semibold text-red-500 mb-2">⚠️ 問題回饋（{flaggedIssues.length}）</p>
+            <div className="space-y-3">
+              {flaggedIssues.map(({ feedback, botMessage }) => (
+                <div key={feedback.id} className="bg-red-50 rounded-xl px-3 py-2.5 space-y-2">
+                  {botMessage && (
+                    <div>
+                      <p className="text-[10px] text-red-400 mb-1">小螞蟻回覆：</p>
+                      <p className="text-[12px] text-stone-600 line-clamp-3">{botMessage.content}</p>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1 border-t border-red-100">
+                    <p className="text-[10px] text-red-500">顧客表示不滿意</p>
+                    <p className="text-[10px] text-red-400">{formatTime(feedback.createdAt)}</p>
+                  </div>
                 </div>
               ))}
             </div>
