@@ -5,9 +5,9 @@ const CALL_OWNER: QuickReplyItem = {
   action: { type: "message", label: "👩 呼叫闆娘", text: "呼叫闆娘" },
 };
 
-const BAD_ANSWER: QuickReplyItem = {
+const FEEDBACK: QuickReplyItem = {
   type: "action",
-  action: { type: "postback", label: "❌ 回答不對", data: "FEEDBACK:BAD", displayText: "這個回答不太對..." },
+  action: { type: "postback", label: "沒有解答到嗎？", data: "FEEDBACK:BAD", displayText: "這個回答沒有解答到我的問題" },
 };
 
 const COMMON_REPLIES: QuickReplyItem[] = [
@@ -23,7 +23,7 @@ const COMMON_REPLIES: QuickReplyItem[] = [
     type: "action",
     action: { type: "message", label: "📅 我要預約取貨", text: "我要預約取貨" },
   },
-  BAD_ANSWER,
+  FEEDBACK,
   CALL_OWNER,
 ];
 
@@ -40,7 +40,6 @@ const PRODUCT_FOLLOW_UP: QuickReplyItem[] = [
     type: "action",
     action: { type: "message", label: "🛒 我要訂購", text: "怎麼訂購？" },
   },
-  BAD_ANSWER,
   CALL_OWNER,
 ];
 
