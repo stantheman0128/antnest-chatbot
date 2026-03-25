@@ -128,6 +128,12 @@ const CONFIG_SECTIONS: Omit<ConfigItem, "value">[] = [
   },
 ];
 
+interface LineUserInfo {
+  lineUserId: string;
+  displayName: string;
+  pictureUrl: string | null;
+}
+
 export default function SettingsPage() {
   const [configs, setConfigs] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -135,6 +141,8 @@ export default function SettingsPage() {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [allUsers, setAllUsers] = useState<LineUserInfo[]>([]);
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
 
   function getToken() {
     return localStorage.getItem("admin_token") || "";
@@ -142,6 +150,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchConfigs();
+    fetchUsers();
   }, []);
 
   async function fetchConfigs() {
@@ -161,6 +170,32 @@ export default function SettingsPage() {
       // ignore
     }
     setLoading(false);
+  }
+
+  async function fetchUsers() {
+    try {
+      const res = await fetch("/api/admin/users", {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) setAllUsers(await res.json());
+    } catch { /* ignore */ }
+  }
+
+  function getAdminIds(): string[] {
+    return (configs.get(AUTO_RESPOND_IDS_KEY) || "").split(/[\n,]/).map((id) => id.trim()).filter(Boolean);
+  }
+
+  async function saveAdminIds(ids: string[]) {
+    const value = ids.join("\n");
+    const res = await fetch("/api/admin/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ key: AUTO_RESPOND_IDS_KEY, value }),
+    });
+    if (res.ok) {
+      setConfigs((prev) => { const m = new Map(prev); m.set(AUTO_RESPOND_IDS_KEY, value); return m; });
+      setMessage("管理員名單已更新！");
+    }
   }
 
   function startEdit(key: string) {
@@ -280,48 +315,109 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Auto-respond user IDs */}
-        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-2">
-          <div>
-            <p className="text-[14px] font-medium text-stone-800">自動回應名單</p>
-            <p className="text-[11px] text-stone-400 mt-0.5">
-              填入 LINE User ID，小螞蟻會自動回覆這些人的訊息（每行一個 ID）
-            </p>
+        {/* Admin / always-respond users */}
+        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[14px] font-medium text-stone-800">管理員身份</p>
+              <p className="text-[11px] text-stone-400 mt-0.5">
+                這些人傳訊息時，小螞蟻會自動回覆（不需要呼叫小螞蟻）
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddAdmin(true)}
+              className="px-2.5 py-1 bg-amber-800 text-white rounded-lg text-[11px] font-medium hover:bg-amber-900 transition-colors shrink-0"
+            >
+              + 新增
+            </button>
           </div>
-          <textarea
-            value={configs.get(AUTO_RESPOND_IDS_KEY) || ""}
-            onChange={(e) => {
-              setConfigs((prev) => {
-                const m = new Map(prev);
-                m.set(AUTO_RESPOND_IDS_KEY, e.target.value);
-                return m;
-              });
-            }}
-            rows={3}
-            className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[12px] text-stone-700 font-mono bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-y"
-            placeholder={"U0849d92dc4c5b54ee...\nU5a5c90a945394ff9..."}
-          />
-          <button
-            onClick={async () => {
-              const value = configs.get(AUTO_RESPOND_IDS_KEY) || "";
-              const res = await fetch("/api/admin/config", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${getToken()}`,
-                },
-                body: JSON.stringify({ key: AUTO_RESPOND_IDS_KEY, value }),
-              });
-              if (res.ok) {
-                setMessage("自動回應名單已更新！");
-              } else {
-                setMessage("儲存失敗");
-              }
-            }}
-            className="px-3 py-1.5 bg-amber-800 text-white rounded-lg text-[12px] font-medium hover:bg-amber-900 transition-colors"
-          >
-            儲存名單
-          </button>
+
+          {/* Current admins */}
+          <div className="space-y-2">
+            {getAdminIds().length === 0 ? (
+              <p className="text-[12px] text-stone-400 py-2">尚未設定管理員</p>
+            ) : (
+              getAdminIds().map((id) => {
+                const user = allUsers.find((u) => u.lineUserId === id);
+                return (
+                  <div key={id} className="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5">
+                    {user?.pictureUrl ? (
+                      <img src={user.pictureUrl} alt="" className="w-8 h-8 rounded-full shrink-0" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-[11px] text-stone-400 shrink-0">👤</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-stone-800 truncate">{user?.displayName || "未知用戶"}</p>
+                      <p className="text-[10px] text-stone-400 font-mono truncate">{id}</p>
+                    </div>
+                    <button
+                      onClick={() => saveAdminIds(getAdminIds().filter((x) => x !== id))}
+                      className="text-[11px] text-red-400 hover:text-red-600 shrink-0"
+                    >
+                      移除
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Add admin modal */}
+          {showAddAdmin && (
+            <div className="border border-stone-200 rounded-xl p-3 space-y-2 bg-stone-50">
+              <p className="text-[11px] font-semibold text-stone-500">選擇用戶或輸入 ID</p>
+              {/* Known users not yet admin */}
+              {allUsers.filter((u) => !getAdminIds().includes(u.lineUserId)).length > 0 && (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {allUsers.filter((u) => !getAdminIds().includes(u.lineUserId)).map((user) => (
+                    <button
+                      key={user.lineUserId}
+                      onClick={() => {
+                        saveAdminIds([...getAdminIds(), user.lineUserId]);
+                        setShowAddAdmin(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white transition-colors text-left"
+                    >
+                      {user.pictureUrl ? (
+                        <img src={user.pictureUrl} alt="" className="w-7 h-7 rounded-full shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] text-stone-400 shrink-0">👤</div>
+                      )}
+                      <span className="text-[12px] text-stone-700 truncate">{user.displayName}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Manual ID input */}
+              <div className="flex gap-2">
+                <input
+                  id="manual-admin-id"
+                  type="text"
+                  placeholder="或手動輸入 LINE User ID"
+                  className="flex-1 px-2.5 py-1.5 border border-stone-200 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:ring-2 focus:ring-amber-800/15"
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById("manual-admin-id") as HTMLInputElement;
+                    const val = input?.value?.trim();
+                    if (val && !getAdminIds().includes(val)) {
+                      saveAdminIds([...getAdminIds(), val]);
+                      setShowAddAdmin(false);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 bg-amber-800 text-white rounded-lg text-[11px] font-medium hover:bg-amber-900 transition-colors shrink-0"
+                >
+                  加入
+                </button>
+              </div>
+              <button
+                onClick={() => setShowAddAdmin(false)}
+                className="text-[11px] text-stone-400 hover:text-stone-600"
+              >
+                取消
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
