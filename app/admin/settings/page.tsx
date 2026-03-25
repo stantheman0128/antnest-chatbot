@@ -265,6 +265,43 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* AI Model selection */}
+      <div>
+        <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
+          AI 模型
+        </p>
+        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-2">
+          <div>
+            <p className="text-[14px] font-medium text-stone-800">回覆模型</p>
+            <p className="text-[11px] text-stone-400 mt-0.5">
+              選擇小螞蟻使用的 AI 模型（太慢時會自動切換備援模型）
+            </p>
+          </div>
+          <select
+            value={configs.get("ai_model") || "gemini-2.5-flash-lite"}
+            onChange={async (e) => {
+              const value = e.target.value;
+              const res = await fetch("/api/admin/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+                body: JSON.stringify({ key: "ai_model", value }),
+              });
+              if (res.ok) {
+                setConfigs((prev) => { const m = new Map(prev); m.set("ai_model", value); return m; });
+                setMessage("模型已切換為 " + value);
+              }
+            }}
+            className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[13px] text-stone-700 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700"
+          >
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（推薦，最快）</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash（較聰明）</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro（最聰明，較慢）</option>
+            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview（實驗性）</option>
+            <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite Preview（實驗性，可能很慢）</option>
+          </select>
+        </div>
+      </div>
+
       {/* Auto-sync section */}
       <div>
         <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">

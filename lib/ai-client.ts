@@ -280,20 +280,29 @@ function sanitizeUserInput(message: string): string {
   return sanitized;
 }
 
+const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+const FAILOVER_MODEL = "gemini-2.5-flash";
+
 async function callGemini(
   message: string,
-  history: MessageHistory[]
-): Promise<{ text: string; validIds: string[] }> {
+  history: MessageHistory[],
+  modelOverride?: string
+): Promise<{ text: string; validIds: string[]; model: string }> {
   const genAI = getAIClient();
-  const [systemPrompt, { instruction, validIds }] = await Promise.all([
+
+  // Load system prompt, product card instruction, and admin-configured model in parallel
+  const { getConfig } = await import("./data-service");
+  const [systemPrompt, { instruction, validIds }, configModel] = await Promise.all([
     getSystemPrompt(),
     getProductCardInstruction(),
+    getConfig("ai_model"),
   ]);
 
+  const modelId = modelOverride || configModel || DEFAULT_MODEL;
   const fullPrompt = systemPrompt + "\n" + instruction;
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-3.1-flash-lite-preview",
+    model: modelId,
     systemInstruction: fullPrompt,
   });
 
@@ -317,7 +326,7 @@ async function callGemini(
     },
   });
 
-  return { text: response.response.text() || "", validIds };
+  return { text: response.response.text() || "", validIds, model: modelId };
 }
 
 const FALLBACK: AIResponse = {
@@ -329,44 +338,60 @@ const FALLBACK: AIResponse = {
   showPickupLink: false,
 };
 
+/** Race a promise against a timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 /**
- * Generate AI response using Google Gemini 3.1 Flash-Lite
- * Includes automatic retry on first failure (handles cold start / rate limit)
+ * Generate AI response with auto-failover.
+ * 1. Try admin-configured model (default: gemini-2.5-flash-lite) with 8s timeout
+ * 2. If timeout/error → failover to gemini-2.5-flash with 15s timeout
+ * 3. If still fails → return fallback message
  */
 export async function generateAIResponse(
   message: string,
   history: MessageHistory[] = []
 ): Promise<AIResponse> {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const startTime = Date.now();
-      const { text: textContent, validIds } = await callGemini(message, history);
-      const latencyMs = Date.now() - startTime;
-      console.log(`[AI] model=gemini-3.1-flash-lite-preview latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length} attempt=${attempt + 1}`);
+  // Attempt 1: primary model (fast, with 8s timeout)
+  try {
+    const startTime = Date.now();
+    const { text: textContent, validIds, model } = await withTimeout(
+      callGemini(message, history),
+      8000,
+      "primary"
+    );
+    const latencyMs = Date.now() - startTime;
+    console.log(`[AI] model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`);
 
-      if (!textContent) {
-        return {
-          text: "抱歉，我暫時無法回答你的問題。請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
-          productSpecs: [],
-          escalate: false,
-          escalateReason: "",
-          skip: false,
-          showPickupLink: false,
-        };
-      }
-
+    if (textContent) {
       return parseAIResponse(textContent, validIds);
-    } catch (error) {
-      console.error(`AI generation error (attempt ${attempt + 1}):`, error);
-
-      // Retry once on failure
-      if (attempt === 0) {
-        console.log("Retrying Gemini API call...");
-        continue;
-      }
-
-      return FALLBACK;
     }
+  } catch (error: any) {
+    console.warn(`[AI] Primary model failed: ${error?.message}`);
+  }
+
+  // Attempt 2: failover model (smarter, with 15s timeout)
+  try {
+    const startTime = Date.now();
+    const { text: textContent, validIds, model } = await withTimeout(
+      callGemini(message, history, FAILOVER_MODEL),
+      15000,
+      "failover"
+    );
+    const latencyMs = Date.now() - startTime;
+    console.log(`[AI] failover model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`);
+
+    if (textContent) {
+      return parseAIResponse(textContent, validIds);
+    }
+  } catch (error: any) {
+    console.error(`[AI] Failover model also failed: ${error?.message}`);
   }
 
   return FALLBACK;
