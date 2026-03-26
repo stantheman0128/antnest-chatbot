@@ -24,6 +24,7 @@ import {
   deleteConfig,
   upsertLineUser,
   logConversation,
+  getConversationHistory,
 } from "@/lib/data-service";
 
 // Extend Vercel function timeout (free plan: max 60s, Pro: max 300s)
@@ -460,8 +461,12 @@ async function handleTextMessage(
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("AI_TIMEOUT")), 25000)
     );
+    // Fetch recent conversation for multi-turn context
+    const recentHistory = userId ? await getConversationHistory(userId, 20) : [];
+    const history = recentHistory.reverse().map((h) => ({ role: h.role, content: h.content }));
+
     aiResponse = await Promise.race([
-      generateAIResponse(userMessage, []),
+      generateAIResponse(userMessage, history),
       timeoutPromise,
     ]);
   } catch (err: any) {
