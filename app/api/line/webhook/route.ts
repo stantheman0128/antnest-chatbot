@@ -512,6 +512,7 @@ async function handleTextMessage(
   }
 
   const hasProducts = aiResponse.productSpecs.length > 0;
+  const mentionsOwner = aiResponse.text.includes("呼叫闆娘");
   const maxTextSegments = hasProducts ? 2 : 3;
   const segments = splitResponse(aiResponse.text, maxTextSegments);
 
@@ -520,7 +521,7 @@ async function handleTextMessage(
     text: seg,
   }));
 
-  textMessages[textMessages.length - 1].quickReply = getQuickReply(hasProducts);
+  textMessages[textMessages.length - 1].quickReply = getQuickReply(hasProducts, mentionsOwner);
 
   const messages: Message[] = [...textMessages];
 

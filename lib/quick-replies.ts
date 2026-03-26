@@ -55,12 +55,19 @@ const PAUSED_REPLIES: QuickReplyItem[] = [
 ];
 
 /**
- * Get appropriate quick replies based on context
+ * Get appropriate quick replies based on context.
+ * If mentionsOwner is true, "呼叫闆娘" button is moved to the front.
  */
-export function getQuickReply(hasProducts: boolean): QuickReply {
-  return {
-    items: hasProducts ? PRODUCT_FOLLOW_UP : COMMON_REPLIES,
-  };
+export function getQuickReply(hasProducts: boolean, mentionsOwner = false): QuickReply {
+  const items = hasProducts ? [...PRODUCT_FOLLOW_UP] : [...COMMON_REPLIES];
+  if (mentionsOwner) {
+    const idx = items.findIndex((it) => it.action && "text" in it.action && it.action.text === "呼叫闆娘");
+    if (idx > 0) {
+      const [owner] = items.splice(idx, 1);
+      items.unshift(owner);
+    }
+  }
+  return { items };
 }
 
 export function getPausedQuickReply(): QuickReply {
