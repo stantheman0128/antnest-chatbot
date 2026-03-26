@@ -54,6 +54,8 @@ export {
   updateReservationNote,
   getReservationById,
   getLatestReservationByUser,
+  getReservationsByUser,
+  updateReservationOrderNumber,
   getConfirmedReservationsForCalendar,
 } from "./db-reservations";
 

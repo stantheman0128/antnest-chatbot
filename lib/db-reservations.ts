@@ -217,6 +217,26 @@ export async function getLatestReservationByUser(lineUserId: string): Promise<Re
   return { ...mapDbReservation(data), availableDate: data.pickup_availability?.available_date };
 }
 
+export async function getReservationsByUser(lineUserId: string): Promise<Reservation[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const today = getTaiwanToday();
+  const { data, error } = await sb.from("reservations")
+    .select("*, pickup_availability(available_date)")
+    .eq("line_user_id", lineUserId).in("status", ["pending", "confirmed"])
+    .gte("pickup_availability.available_date", today)
+    .order("created_at", { ascending: false });
+  if (error) { console.error("getReservationsByUser error:", error); return []; }
+  return (data || []).map((r: any) => ({ ...mapDbReservation(r), availableDate: r.pickup_availability?.available_date }));
+}
+
+export async function updateReservationOrderNumber(id: string, orderNumber: string): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const { error } = await sb.from("reservations").update({ order_number: orderNumber }).eq("id", id);
+  return !error;
+}
+
 export async function getConfirmedReservationsForCalendar(): Promise<Reservation[]> {
   const sb = getSupabase();
   if (!sb) return [];
