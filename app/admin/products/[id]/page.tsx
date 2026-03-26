@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { getToken, useToast } from "@/lib/admin-utils";
 
 interface ProductForm {
   id: string;
@@ -80,11 +81,7 @@ export default function ProductEditPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState("");
-
-  function getToken() {
-    return localStorage.getItem("admin_token") || "";
-  }
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!isNew) {
@@ -124,9 +121,11 @@ export default function ProductEditPage() {
             alcoholFree: product.alcoholFree,
           });
         }
+      } else {
+        toast("載入產品資料失敗", "error");
       }
     } catch {
-      // ignore
+      toast("載入產品資料失敗", "error");
     }
     setLoading(false);
   }
@@ -134,7 +133,6 @@ export default function ProductEditPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setMessage("");
 
     const payload = {
       id: form.id,
@@ -166,15 +164,15 @@ export default function ProductEditPage() {
       });
 
       if (res.ok) {
-        setMessage("儲存成功！");
+        toast("儲存成功！");
         if (isNew) {
           router.replace(`/admin/products/${form.id}`);
         }
       } else {
-        setMessage("儲存失敗");
+        toast("儲存失敗", "error");
       }
     } catch {
-      setMessage("網路錯誤");
+      toast("網路錯誤", "error");
     }
     setSaving(false);
   }
@@ -199,7 +197,6 @@ export default function ProductEditPage() {
               type="button"
               onClick={async () => {
                 setSyncing(true);
-                setMessage("");
                 try {
                   const res = await fetch("/api/admin/scrape", {
                     method: "PUT",
@@ -207,19 +204,19 @@ export default function ProductEditPage() {
                     body: JSON.stringify({ handle: productId }),
                   });
                   if (res.ok) {
-                    setMessage("同步成功！重新載入...");
+                    toast("同步成功！重新載入...");
                     await fetchProduct();
                   } else {
                     const err = await res.json();
-                    setMessage(`同步失敗：${err.error || "未知錯誤"}`);
+                    toast(`同步失敗：${err.error || "未知錯誤"}`, "error");
                   }
                 } catch {
-                  setMessage("同步失敗：網路錯誤");
+                  toast("同步失敗：網路錯誤", "error");
                 }
                 setSyncing(false);
               }}
               disabled={syncing}
-              className="flex items-center gap-1 text-[12px] text-amber-600 hover:text-amber-800 disabled:opacity-50"
+              className="flex items-center gap-1 text-[11px] text-amber-600 hover:text-amber-800 disabled:opacity-50"
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`}>
                 <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
@@ -454,16 +451,6 @@ export default function ProductEditPage() {
         </label>
 
         {/* Save */}
-        {message && (
-          <p
-            className={`text-sm ${
-              message.includes("成功") ? "text-green-600" : "text-red-600"
-            }`}
-          >
-            {message}
-          </p>
-        )}
-
         <button
           type="submit"
           disabled={saving}

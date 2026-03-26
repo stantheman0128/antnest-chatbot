@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { COMPLAINT_KEYWORDS } from "@/lib/data-service";
+import { getToken, useToast } from "@/lib/admin-utils";
 
 interface Customer {
   lineUserId: string;
@@ -45,10 +47,7 @@ export default function UsersPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [activeChart, setActiveChart] = useState<"apiCalls" | "latency" | "tokens">("apiCalls");
   const [customerFilter, setCustomerFilter] = useState<"recent" | "pickup" | "flagged">("recent");
-
-  function getToken() {
-    return localStorage.getItem("admin_token") || "";
-  }
+  const { toast } = useToast();
 
   useEffect(() => {
     Promise.all([fetchCustomers(), fetchStats()]).then(() => setLoading(false));
@@ -58,14 +57,18 @@ export default function UsersPage() {
     try {
       const res = await fetch("/api/admin/users", { headers: { Authorization: `Bearer ${getToken()}` } });
       if (res.ok) setCustomers(await res.json());
-    } catch { /* ignore */ }
+    } catch {
+      toast("無法載入顧客列表", "error");
+    }
   }
 
   async function fetchStats() {
     try {
       const res = await fetch("/api/admin/users?stats=true", { headers: { Authorization: `Bearer ${getToken()}` } });
       if (res.ok) setStats(await res.json());
-    } catch { /* ignore */ }
+    } catch {
+      toast("無法載入統計資料", "error");
+    }
   }
 
   async function selectUser(user: Customer) {
@@ -159,13 +162,17 @@ export default function UsersPage() {
     const resolvedIssues = allIssues.filter((i) => i.resolved);
 
     async function toggleResolved(logId: string, resolved: boolean) {
-      await fetch("/api/admin/users", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ logId, resolved }),
-      });
-      // Update local history metadata
-      setHistory((prev) => prev.map((l) => l.id === logId ? { ...l, metadata: { ...l.metadata, resolved } } : l));
+      try {
+        await fetch("/api/admin/users", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify({ logId, resolved }),
+        });
+        // Update local history metadata
+        setHistory((prev) => prev.map((l) => l.id === logId ? { ...l, metadata: { ...l.metadata, resolved } } : l));
+      } catch {
+        toast("更新狀態失敗", "error");
+      }
     }
 
     return (
@@ -179,12 +186,12 @@ export default function UsersPage() {
         <div className="bg-white rounded-2xl border border-stone-100 p-4 space-y-3">
           <div className="flex items-center gap-3">
             {selectedUser.pictureUrl ? (
-              <img src={selectedUser.pictureUrl} alt="" className="w-11 h-11 rounded-full" />
+              <Image src={selectedUser.pictureUrl} alt={selectedUser.displayName + " 的大頭貼"} width={44} height={44} className="w-11 h-11 rounded-full" />
             ) : (
               <div className="w-11 h-11 rounded-full bg-stone-200 flex items-center justify-center text-stone-400">👤</div>
             )}
             <div className="flex-1">
-              <p className="text-[15px] font-semibold text-stone-800">{selectedUser.displayName}</p>
+              <p className="text-[13px] font-semibold text-stone-800">{selectedUser.displayName}</p>
               <p className="text-[11px] text-stone-400">
                 {selectedUser.messageCount} 則 · {timeAgo(selectedUser.lastSeen)}
                 {selectedUser.upcomingPickup && ` · 📦 ${selectedUser.upcomingPickup}`}
@@ -194,9 +201,9 @@ export default function UsersPage() {
           {/* AI summary inline */}
           <div className="bg-amber-50 rounded-xl px-3 py-2">
             {loadingDetail ? (
-              <p className="text-[12px] text-amber-700 animate-pulse">摘要分析中...</p>
+              <p className="text-[11px] text-amber-700 animate-pulse">摘要分析中...</p>
             ) : (
-              <p className="text-[12px] text-amber-900">{summary || "尚無對話紀錄"}</p>
+              <p className="text-[11px] text-amber-900">{summary || "尚無對話紀錄"}</p>
             )}
           </div>
         </div>
@@ -215,14 +222,14 @@ export default function UsersPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                         issue.type === "feedback" ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
                       }`}>
                         {issue.type === "feedback" ? "回答問題" : "產品問題"}
                       </span>
-                      <span className="text-[9px] text-stone-400">{formatTime(issue.time)}</span>
+                      <span className="text-[10px] text-stone-400">{formatTime(issue.time)}</span>
                     </div>
-                    <p className="text-[12px] text-stone-700 line-clamp-2">
+                    <p className="text-[11px] text-stone-700 line-clamp-2">
                       {issue.type === "complaint" ? issue.content : issue.context || issue.content}
                     </p>
                   </div>
@@ -252,12 +259,12 @@ export default function UsersPage() {
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-400">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-400">
                         {issue.type === "feedback" ? "回答問題" : "產品問題"}
                       </span>
-                      <span className="text-[9px] text-stone-400">{formatTime(issue.time)}</span>
+                      <span className="text-[10px] text-stone-400">{formatTime(issue.time)}</span>
                     </div>
-                    <p className="text-[12px] text-stone-400 line-clamp-1 line-through">
+                    <p className="text-[11px] text-stone-400 line-clamp-1 line-through">
                       {issue.type === "complaint" ? issue.content : issue.context || issue.content}
                     </p>
                   </div>
@@ -270,7 +277,7 @@ export default function UsersPage() {
         {/* No issues */}
         {allIssues.length === 0 && (
           <div className="bg-white rounded-2xl border border-stone-100 px-4 py-6 text-center">
-            <p className="text-[12px] text-stone-400">沒有問題回饋紀錄</p>
+            <p className="text-[11px] text-stone-400">沒有問題回饋紀錄</p>
           </div>
         )}
       </div>
@@ -344,12 +351,12 @@ export default function UsersPage() {
                 : String(val);
               return (
                 <div key={d.date} className="flex-1 flex flex-col items-center justify-end" style={{ height: "96px" }}>
-                  <p className="text-[9px] text-stone-500 font-medium mb-1">{label}</p>
+                  <p className="text-[10px] text-stone-500 font-medium mb-1">{label}</p>
                   <div
                     className={`w-full max-w-[28px] rounded-t-md ${d.flagged > 0 ? "bg-red-400" : "bg-amber-600"}`}
                     style={{ height: `${barH}px` }}
                   />
-                  <p className="text-[9px] text-stone-400 mt-1">{d.date}</p>
+                  <p className="text-[10px] text-stone-400 mt-1">{d.date}</p>
                 </div>
               );
             })}
@@ -379,10 +386,10 @@ export default function UsersPage() {
             >
               {tab.label}
               {tab.key === "pickup" && pickupCount > 0 && (
-                <span className="ml-1 text-[9px]">({pickupCount})</span>
+                <span className="ml-1 text-[10px]">({pickupCount})</span>
               )}
               {tab.key === "flagged" && flaggedTabCount > 0 && (
-                <span className="ml-1 text-[9px]">({flaggedTabCount})</span>
+                <span className="ml-1 text-[10px]">({flaggedTabCount})</span>
               )}
             </button>
           ))}
@@ -403,9 +410,9 @@ export default function UsersPage() {
               >
                 <div className="relative shrink-0">
                   {c.pictureUrl ? (
-                    <img src={c.pictureUrl} alt="" className="w-9 h-9 rounded-full" />
+                    <Image src={c.pictureUrl} alt={c.displayName + " 的大頭貼"} width={36} height={36} className="w-9 h-9 rounded-full" />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 text-[12px]">👤</div>
+                    <div className="w-9 h-9 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 text-[11px]">👤</div>
                   )}
                   {c.flaggedCount > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
@@ -413,9 +420,9 @@ export default function UsersPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[14px] font-medium text-stone-800 truncate">{c.displayName}</p>
+                    <p className="text-[13px] font-medium text-stone-800 truncate">{c.displayName}</p>
                     {c.upcomingPickup && (
-                      <span className="text-[9px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
                         📦 {c.upcomingPickup}
                       </span>
                     )}

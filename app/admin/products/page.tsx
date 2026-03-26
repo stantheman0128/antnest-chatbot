@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { getToken, useToast } from "@/lib/admin-utils";
 
 interface Product {
   id: string;
@@ -16,15 +17,12 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchProducts();
   }, []);
-
-  function getToken() {
-    return localStorage.getItem("admin_token") || "";
-  }
 
   async function fetchProducts() {
     try {
@@ -32,15 +30,15 @@ export default function ProductsPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) setProducts(await res.json());
+      else toast("載入產品失敗", "error");
     } catch {
-      // ignore
+      toast("載入產品失敗", "error");
     }
     setLoading(false);
   }
 
   async function syncFromCyberbiz() {
     setSyncing(true);
-    setSyncResult(null);
     try {
       const res = await fetch("/api/admin/scrape", {
         method: "POST",
@@ -48,34 +46,44 @@ export default function ProductsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSyncResult(
-          `同步完成 · 新增 ${data.added} · 更新 ${data.updated} · 下架 ${data.deactivated}`
-        );
+        toast(`同步完成 · 新增 ${data.added} · 更新 ${data.updated} · 下架 ${data.deactivated}`);
         await fetchProducts();
       } else {
-        setSyncResult("同步失敗，請稍後再試");
+        toast("同步失敗，請稍後再試", "error");
       }
     } catch {
-      setSyncResult("同步失敗，請稍後再試");
+      toast("同步失敗，請稍後再試", "error");
     }
     setSyncing(false);
   }
 
   async function toggleActive(product: Product) {
-    const updated = { ...product, isActive: !product.isActive };
-    const res = await fetch("/api/admin/products", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify(updated),
-    });
-
-    if (res.ok) {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? updated : p))
-      );
+    setTogglingIds((prev) => new Set(prev).add(product.id));
+    try {
+      const updated = { ...product, isActive: !product.isActive };
+      const res = await fetch("/api/admin/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        setProducts((prev) =>
+          prev.map((p) => (p.id === product.id ? updated : p))
+        );
+      } else {
+        toast("操作失敗", "error");
+      }
+    } catch {
+      toast("網路錯誤", "error");
+    } finally {
+      setTogglingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      });
     }
   }
 
@@ -96,7 +104,7 @@ export default function ProductsPage() {
           <button
             onClick={syncFromCyberbiz}
             disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-stone-300 rounded-lg text-[12px] font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-stone-300 rounded-lg text-[11px] font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-colors"
           >
             <svg
               viewBox="0 0 20 20"
@@ -113,7 +121,7 @@ export default function ProductsPage() {
           </button>
           <Link
             href="/admin/products/new"
-            className="flex items-center gap-1 px-3 py-1.5 bg-amber-800 rounded-lg text-[12px] font-medium text-white hover:bg-amber-900 transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 bg-amber-800 rounded-lg text-[11px] font-medium text-white hover:bg-amber-900 transition-colors"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
               <path
@@ -126,18 +134,6 @@ export default function ProductsPage() {
           </Link>
         </div>
       </div>
-
-      {syncResult && (
-        <div
-          className={`px-4 py-2.5 rounded-xl text-[12px] ${
-            syncResult.includes("失敗")
-              ? "bg-red-50 text-red-600"
-              : "bg-amber-50 text-amber-800"
-          }`}
-        >
-          {syncResult}
-        </div>
-      )}
 
       {/* Product list */}
       <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
@@ -157,7 +153,7 @@ export default function ProductsPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Link
                   href={`/admin/products/${product.id}`}
-                  className="text-[14px] font-medium text-stone-800 hover:text-amber-800 transition-colors"
+                  className="text-[13px] font-medium text-stone-800 hover:text-amber-800 transition-colors"
                 >
                   {product.name}
                 </Link>
@@ -168,7 +164,7 @@ export default function ProductsPage() {
                 )}
               </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span className="text-[12px] text-amber-700 font-medium">
+                <span className="text-[11px] text-amber-700 font-medium">
                   {product.price}
                 </span>
                 {product.badges.slice(0, 2).map((badge, i) => (
@@ -183,7 +179,8 @@ export default function ProductsPage() {
             </div>
             <button
               onClick={() => toggleActive(product)}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-[12px] font-medium transition-colors ${
+              disabled={togglingIds.has(product.id)}
+              className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-50 ${
                 product.isActive
                   ? "text-stone-400 hover:bg-stone-100 hover:text-stone-600"
                   : "text-amber-700 hover:bg-amber-50"

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
+import { getToken, useToast } from "@/lib/admin-utils";
 
 interface ConfigItem {
   key: string;
@@ -140,13 +142,9 @@ export default function SettingsPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [allUsers, setAllUsers] = useState<LineUserInfo[]>([]);
   const [showAddAdmin, setShowAddAdmin] = useState(false);
-
-  function getToken() {
-    return localStorage.getItem("admin_token") || "";
-  }
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchConfigs();
@@ -167,7 +165,7 @@ export default function SettingsPage() {
         setConfigs(map);
       }
     } catch {
-      // ignore
+      toast("無法載入設定，請重新整理頁面", "error");
     }
     setLoading(false);
   }
@@ -178,7 +176,9 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) setAllUsers(await res.json());
-    } catch { /* ignore */ }
+    } catch {
+      toast("無法載入用戶清單", "error");
+    }
   }
 
   function getAdminIds(): string[] {
@@ -186,28 +186,30 @@ export default function SettingsPage() {
   }
 
   async function saveAdminIds(ids: string[]) {
-    const value = ids.join("\n");
-    const res = await fetch("/api/admin/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ key: AUTO_RESPOND_IDS_KEY, value }),
-    });
-    if (res.ok) {
-      setConfigs((prev) => { const m = new Map(prev); m.set(AUTO_RESPOND_IDS_KEY, value); return m; });
-      setMessage("管理員名單已更新！");
+    try {
+      const value = ids.join("\n");
+      const res = await fetch("/api/admin/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ key: AUTO_RESPOND_IDS_KEY, value }),
+      });
+      if (res.ok) {
+        setConfigs((prev) => { const m = new Map(prev); m.set(AUTO_RESPOND_IDS_KEY, value); return m; });
+        toast("管理員名單已更新！");
+      }
+    } catch {
+      toast("更新管理員名單失敗", "error");
     }
   }
 
   function startEdit(key: string) {
     setEditingKey(key);
     setEditValue(configs.get(key) || "");
-    setMessage("");
   }
 
   async function handleSave() {
     if (!editingKey) return;
     setSaving(true);
-    setMessage("");
 
     try {
       const res = await fetch("/api/admin/config", {
@@ -227,16 +229,16 @@ export default function SettingsPage() {
           return next;
         });
         if (result.warnings?.length > 0) {
-          setMessage("儲存成功！⚠️ " + result.warnings.join(", "));
+          toast("儲存成功！⚠️ " + result.warnings.join(", "));
         } else {
-          setMessage("儲存成功！即時生效中");
+          toast("儲存成功！即時生效中");
         }
         setEditingKey(null);
       } else {
-        setMessage(result.error || "儲存失敗");
+        toast(result.error || "儲存失敗", "error");
       }
     } catch {
-      setMessage("網路錯誤");
+      toast("網路錯誤", "error");
     }
     setSaving(false);
   }
@@ -253,18 +255,6 @@ export default function SettingsPage() {
     <div className="space-y-5">
       <h1 className="text-[17px] font-semibold text-stone-800">系統設定</h1>
 
-      {message && (
-        <div
-          className={`px-4 py-2.5 rounded-xl text-[12px] ${
-            message.includes("成功")
-              ? "bg-amber-50 text-amber-800"
-              : "bg-red-50 text-red-600"
-          }`}
-        >
-          {message}
-        </div>
-      )}
-
       {/* AI Model selection */}
       <div>
         <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
@@ -272,7 +262,7 @@ export default function SettingsPage() {
         </p>
         <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-2">
           <div>
-            <p className="text-[14px] font-medium text-stone-800">回覆模型</p>
+            <p className="text-[13px] font-medium text-stone-800">回覆模型</p>
             <p className="text-[11px] text-stone-400 mt-0.5">
               選擇小螞蟻使用的 AI 模型（太慢時會自動切換備援模型）
             </p>
@@ -281,14 +271,18 @@ export default function SettingsPage() {
             value={configs.get("ai_model") || "gemini-2.5-flash-lite"}
             onChange={async (e) => {
               const value = e.target.value;
-              const res = await fetch("/api/admin/config", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-                body: JSON.stringify({ key: "ai_model", value }),
-              });
-              if (res.ok) {
-                setConfigs((prev) => { const m = new Map(prev); m.set("ai_model", value); return m; });
-                setMessage("模型已切換為 " + value);
+              try {
+                const res = await fetch("/api/admin/config", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+                  body: JSON.stringify({ key: "ai_model", value }),
+                });
+                if (res.ok) {
+                  setConfigs((prev) => { const m = new Map(prev); m.set("ai_model", value); return m; });
+                  toast("模型已切換為 " + value);
+                }
+              } catch {
+                toast("切換模型失敗", "error");
               }
             }}
             className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[13px] text-stone-700 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700"
@@ -309,29 +303,33 @@ export default function SettingsPage() {
         </p>
         <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 flex items-center justify-between">
           <div>
-            <p className="text-[14px] font-medium text-stone-800">產品自動同步</p>
+            <p className="text-[13px] font-medium text-stone-800">產品自動同步</p>
             <p className="text-[11px] text-stone-400 mt-0.5">
               每週一 20:05（台灣時間）自動同步官網
             </p>
           </div>
           <button
             onClick={async () => {
-              const current = configs.get(AUTO_SYNC_KEY);
-              const next = current === "false" ? "true" : "false";
-              const res = await fetch("/api/admin/config", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${getToken()}`,
-                },
-                body: JSON.stringify({ key: AUTO_SYNC_KEY, value: next }),
-              });
-              if (res.ok) {
-                setConfigs((prev) => {
-                  const m = new Map(prev);
-                  m.set(AUTO_SYNC_KEY, next);
-                  return m;
+              try {
+                const current = configs.get(AUTO_SYNC_KEY);
+                const next = current === "false" ? "true" : "false";
+                const res = await fetch("/api/admin/config", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${getToken()}`,
+                  },
+                  body: JSON.stringify({ key: AUTO_SYNC_KEY, value: next }),
                 });
+                if (res.ok) {
+                  setConfigs((prev) => {
+                    const m = new Map(prev);
+                    m.set(AUTO_SYNC_KEY, next);
+                    return m;
+                  });
+                }
+              } catch {
+                toast("切換自動同步失敗", "error");
               }
             }}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
@@ -356,7 +354,7 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[14px] font-medium text-stone-800">管理員身份</p>
+              <p className="text-[13px] font-medium text-stone-800">管理員身份</p>
               <p className="text-[11px] text-stone-400 mt-0.5">
                 這些人傳訊息時，小螞蟻會自動回覆（不需要呼叫小螞蟻）
               </p>
@@ -372,14 +370,14 @@ export default function SettingsPage() {
           {/* Current admins */}
           <div className="space-y-2">
             {getAdminIds().length === 0 ? (
-              <p className="text-[12px] text-stone-400 py-2">尚未設定管理員</p>
+              <p className="text-[11px] text-stone-400 py-2">尚未設定管理員</p>
             ) : (
               getAdminIds().map((id) => {
                 const user = allUsers.find((u) => u.lineUserId === id);
                 return (
                   <div key={id} className="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5">
                     {user?.pictureUrl ? (
-                      <img src={user.pictureUrl} alt="" className="w-8 h-8 rounded-full shrink-0" />
+                      <Image src={user.pictureUrl} alt={user.displayName + " 的大頭貼"} width={32} height={32} className="w-8 h-8 rounded-full shrink-0" />
                     ) : (
                       <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-[11px] text-stone-400 shrink-0">👤</div>
                     )}
@@ -416,11 +414,11 @@ export default function SettingsPage() {
                       className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white transition-colors text-left"
                     >
                       {user.pictureUrl ? (
-                        <img src={user.pictureUrl} alt="" className="w-7 h-7 rounded-full shrink-0" />
+                        <Image src={user.pictureUrl} alt={user.displayName + " 的大頭貼"} width={28} height={28} className="w-7 h-7 rounded-full shrink-0" />
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] text-stone-400 shrink-0">👤</div>
                       )}
-                      <span className="text-[12px] text-stone-700 truncate">{user.displayName}</span>
+                      <span className="text-[11px] text-stone-700 truncate">{user.displayName}</span>
                     </button>
                   ))}
                 </div>
@@ -474,7 +472,7 @@ export default function SettingsPage() {
                 className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-stone-50 transition-colors text-left group"
               >
                 <div className="flex-1 min-w-0 pr-3">
-                  <p className="text-[14px] font-medium text-stone-800">
+                  <p className="text-[13px] font-medium text-stone-800">
                     {section.label}
                   </p>
                   <p className="text-[11px] text-stone-400 mt-0.5 truncate">
@@ -514,7 +512,7 @@ export default function SettingsPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col">
             <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
-              <h3 className="text-[14px] font-semibold text-stone-800">
+              <h3 className="text-[13px] font-semibold text-stone-800">
                 {CONFIG_SECTIONS.find((s) => s.key === editingKey)?.label ||
                   editingKey}
               </h3>
@@ -555,14 +553,14 @@ export default function SettingsPage() {
             <div className="p-4 border-t border-stone-100 flex gap-3">
               <button
                 onClick={() => setEditingKey(null)}
-                className="flex-1 py-2.5 border border-stone-200 rounded-xl text-[14px] text-stone-600 font-medium hover:bg-stone-50 transition-colors"
+                className="flex-1 py-2.5 border border-stone-200 rounded-xl text-[13px] text-stone-600 font-medium hover:bg-stone-50 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 py-2.5 bg-amber-800 text-white rounded-xl text-[14px] font-medium hover:bg-amber-900 disabled:opacity-60 transition-colors"
+                className="flex-1 py-2.5 bg-amber-800 text-white rounded-xl text-[13px] font-medium hover:bg-amber-900 disabled:opacity-60 transition-colors"
               >
                 {saving ? "儲存中..." : "儲存"}
               </button>

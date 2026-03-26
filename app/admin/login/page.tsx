@@ -55,7 +55,7 @@ export default function AdminLoginPage() {
             </svg>
           </div>
           <h1 className="text-[17px] font-semibold text-stone-800 tracking-tight">螞蟻窩管理後台</h1>
-          <p className="text-[12px] text-stone-400 mt-0.5">請登入以繼續</p>
+          <p className="text-[11px] text-stone-400 mt-0.5">請登入以繼續</p>
         </div>
 
         {/* Form */}
@@ -69,7 +69,7 @@ export default function AdminLoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-[14px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors placeholder:text-stone-300"
+                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-[13px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors placeholder:text-stone-300"
                 placeholder="admin@example.com"
                 required
                 autoComplete="email"
@@ -84,20 +84,20 @@ export default function AdminLoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-[14px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors placeholder:text-stone-300"
+                className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-[13px] text-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors placeholder:text-stone-300"
                 placeholder="••••••••"
                 required
                 autoComplete="current-password"
               />
               {error && (
-                <p className="mt-2 text-[12px] text-red-500">{error}</p>
+                <p className="mt-2 text-[11px] text-red-500">{error}</p>
               )}
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-amber-800 text-white py-2.5 rounded-xl text-[14px] font-medium hover:bg-amber-900 active:scale-[0.98] disabled:opacity-60 transition-all mt-1"
+              className="w-full bg-amber-800 text-white py-2.5 rounded-xl text-[13px] font-medium hover:bg-amber-900 active:scale-[0.98] disabled:opacity-60 transition-all mt-1"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

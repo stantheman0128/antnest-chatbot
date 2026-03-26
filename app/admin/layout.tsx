@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import { ToastProvider } from "@/lib/admin-utils";
 
 const navItems = [
   {
@@ -120,7 +121,7 @@ export default function AdminLayout({
         style={{ paddingBottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="max-w-2xl mx-auto px-4 pt-5 pb-4">
-          {children}
+          <ToastProvider>{children}</ToastProvider>
         </div>
       </main>
 
@@ -146,7 +147,7 @@ export default function AdminLayout({
               >
                 {item.icon}
                 <span
-                  className={`text-[9px] font-medium tracking-wide ${
+                  className={`text-[10px] font-medium tracking-wide ${
                     isActive ? "text-amber-800" : "text-stone-400"
                   }`}
                 >

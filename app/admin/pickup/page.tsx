@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getToken, useToast } from "@/lib/admin-utils";
 
 interface Availability {
   id: string;
@@ -79,6 +80,7 @@ function getTimeDisplay(r: Reservation) {
 
 export default function PickupPage() {
   const [tab, setTab] = useState<"today" | "dates" | "reservations">("today");
+  const { toast } = useToast();
 
   // Availabilities state
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
@@ -110,17 +112,6 @@ export default function PickupPage() {
     note: "",
   });
 
-  const [toast, setToast] = useState<string | null>(null);
-
-  function getToken() {
-    return localStorage.getItem("admin_token") || "";
-  }
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }
-
   useEffect(() => {
     fetchAvailabilities();
     fetchReservations();
@@ -134,7 +125,9 @@ export default function PickupPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) setAvailabilities(await res.json());
-    } catch {}
+    } catch {
+      toast("載入可取貨日期失敗", "error");
+    }
     setLoadingDates(false);
   }
 
@@ -147,7 +140,9 @@ export default function PickupPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) setReservations(await res.json());
-    } catch {}
+    } catch {
+      toast("載入預約紀錄失敗", "error");
+    }
   }
 
   async function fetchUpcomingReservations() {
@@ -156,12 +151,14 @@ export default function PickupPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) setUpcomingReservations(await res.json());
-    } catch {}
+    } catch {
+      toast("載入近期預約失敗", "error");
+    }
   }
 
   async function applyDates() {
     if (selectedDates.size === 0) {
-      showToast("請先在日曆選擇日期");
+      toast("請先在日曆選擇日期", "error");
       return;
     }
     setSaving(true);
@@ -180,45 +177,53 @@ export default function PickupPage() {
         }),
       });
       if (res.ok) {
-        showToast(`已套用 ${selectedDates.size} 個日期`);
+        toast(`已套用 ${selectedDates.size} 個日期`);
         setSelectedDates(new Set());
         await fetchAvailabilities();
       } else {
-        showToast("儲存失敗，請重試");
+        toast("儲存失敗，請重試", "error");
       }
     } catch {
-      showToast("網路錯誤");
+      toast("網路錯誤", "error");
     }
     setSaving(false);
   }
 
   async function deleteAvailability(id: string) {
-    const res = await fetch(`/api/admin/pickup/availability?id=${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (res.ok) {
-      setAvailabilities((prev) => prev.filter((a) => a.id !== id));
-      showToast("已刪除");
+    try {
+      const res = await fetch(`/api/admin/pickup/availability?id=${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) {
+        setAvailabilities((prev) => prev.filter((a) => a.id !== id));
+        toast("已刪除");
+      }
+    } catch {
+      toast("操作失敗", "error");
     }
   }
 
   async function updateStatus(id: string, status: Reservation["status"]) {
-    const res = await fetch("/api/admin/pickup/reservations", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({ id, status }),
-    });
-    if (res.ok) {
-      setReservations((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status } : r))
-      );
-      setUpcomingReservations((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status } : r))
-      );
+    try {
+      const res = await fetch("/api/admin/pickup/reservations", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ id, status }),
+      });
+      if (res.ok) {
+        setReservations((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status } : r))
+        );
+        setUpcomingReservations((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status } : r))
+        );
+      }
+    } catch {
+      toast("操作失敗", "error");
     }
   }
 
@@ -240,23 +245,27 @@ export default function PickupPage() {
 
     if (addForm.note) body.note = addForm.note;
 
-    const res = await fetch("/api/admin/pickup/reservations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch("/api/admin/pickup/reservations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    if (res.ok) {
-      showToast("已新增預約");
-      setShowAddModal(false);
-      setAddForm({ availabilityId: "", displayName: "", bookingType: "flexible", pickupTime: "", flexiblePeriod: "afternoon", note: "" });
-      fetchReservations();
-      fetchUpcomingReservations();
-    } else {
-      showToast("新增失敗");
+      if (res.ok) {
+        toast("已新增預約");
+        setShowAddModal(false);
+        setAddForm({ availabilityId: "", displayName: "", bookingType: "flexible", pickupTime: "", flexiblePeriod: "afternoon", note: "" });
+        fetchReservations();
+        fetchUpcomingReservations();
+      } else {
+        toast("新增失敗", "error");
+      }
+    } catch {
+      toast("操作失敗", "error");
     }
   }
 
@@ -306,17 +315,11 @@ export default function PickupPage() {
             }
             setShowAddModal(true);
           }}
-          className="text-[12px] px-3 py-1.5 bg-amber-800 text-white rounded-lg hover:bg-amber-900 transition-colors font-medium"
+          className="text-[11px] px-3 py-1.5 bg-amber-800 text-white rounded-lg hover:bg-amber-900 transition-colors font-medium"
         >
           + 手動新增
         </button>
       </div>
-
-      {toast && (
-        <div className="bg-amber-50 text-amber-800 px-4 py-2.5 rounded-xl text-[12px]">
-          {toast}
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="flex bg-white rounded-xl border border-stone-200 p-1 gap-1">
@@ -346,7 +349,7 @@ export default function PickupPage() {
 
           {sortedUpcomingDates.map((date) => (
             <div key={date} className="space-y-2">
-              <p className="text-[12px] font-semibold text-stone-500 px-1">
+              <p className="text-[11px] font-semibold text-stone-500 px-1">
                 {formatDate(date)}
                 {date === todayStr && (
                   <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">今天</span>
@@ -359,7 +362,7 @@ export default function PickupPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-[14px] font-semibold text-stone-800 truncate">
+                      <p className="text-[13px] font-semibold text-stone-800 truncate">
                         {r.displayName}
                       </p>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
@@ -412,7 +415,7 @@ export default function PickupPage() {
                   <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
               </button>
-              <span className="text-[14px] font-semibold text-stone-800">{monthLabel}</span>
+              <span className="text-[13px] font-semibold text-stone-800">{monthLabel}</span>
               <button
                 onClick={nextMonth}
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-600 transition-colors"
@@ -480,7 +483,7 @@ export default function PickupPage() {
                 className="w-full border border-stone-200 rounded-xl px-3 py-2 text-[13px] text-stone-900 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors" />
             </div>
             <button onClick={applyDates} disabled={saving || selectedDates.size === 0}
-              className="w-full py-2.5 bg-amber-800 text-white rounded-xl text-[14px] font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors">
+              className="w-full py-2.5 bg-amber-800 text-white rounded-xl text-[13px] font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors">
               {saving ? "套用中..." : `套用到 ${selectedDates.size} 個日期`}
             </button>
           </div>
@@ -501,7 +504,7 @@ export default function PickupPage() {
             {availabilities.map((avail) => (
               <div key={avail.id} className="bg-white rounded-xl border border-stone-100 px-4 py-3 flex items-center justify-between">
                 <div>
-                  <p className="text-[14px] font-semibold text-stone-800">{formatDate(avail.availableDate)}</p>
+                  <p className="text-[13px] font-semibold text-stone-800">{formatDate(avail.availableDate)}</p>
                   <p className="text-[11px] text-stone-400 mt-0.5">
                     {avail.startTime.slice(0, 5)}–{avail.endTime.slice(0, 5)}
                     <span className="mx-1.5 text-stone-300">·</span>
@@ -511,7 +514,7 @@ export default function PickupPage() {
                   </p>
                 </div>
                 <button onClick={() => deleteAvailability(avail.id)}
-                  className="text-[12px] px-2.5 py-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                  className="text-[11px] px-2.5 py-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
                   刪除
                 </button>
               </div>
@@ -529,7 +532,7 @@ export default function PickupPage() {
               className="flex-1 border border-stone-200 rounded-xl px-3 py-2 text-[13px] text-stone-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors" />
             {dateFilter && (
               <button onClick={() => { setDateFilter(""); fetchReservations(); }}
-                className="text-[12px] text-stone-400 hover:text-stone-600 px-2 transition-colors">
+                className="text-[11px] text-stone-400 hover:text-stone-600 px-2 transition-colors">
                 清除
               </button>
             )}
@@ -546,7 +549,7 @@ export default function PickupPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <p className="text-[14px] font-semibold text-stone-800">{r.displayName}</p>
+                    <p className="text-[13px] font-semibold text-stone-800">{r.displayName}</p>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLE[r.status] || "bg-stone-100 text-stone-500"}`}>
                       {STATUS_LABEL[r.status]}
                     </span>
@@ -557,7 +560,7 @@ export default function PickupPage() {
                     </span>
                   </div>
                   {r.availableDate && (
-                    <p className="text-[12px] text-stone-500">
+                    <p className="text-[11px] text-stone-500">
                       {formatDate(r.availableDate)}
                       <span className="mx-1 text-stone-300">·</span>
                       {getTimeDisplay(r)}
@@ -570,11 +573,11 @@ export default function PickupPage() {
                   {r.status === "confirmed" && (
                     <>
                       <button onClick={() => updateStatus(r.id, "completed")}
-                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-stone-100 text-stone-600 hover:bg-stone-200 transition-colors">
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-stone-100 text-stone-600 hover:bg-stone-200 transition-colors">
                         完成
                       </button>
                       <button onClick={() => updateStatus(r.id, "cancelled")}
-                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
                         取消
                       </button>
                     </>
@@ -591,7 +594,7 @@ export default function PickupPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col">
             <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
-              <h3 className="text-[14px] font-semibold text-stone-800">手動新增預約</h3>
+              <h3 className="text-[13px] font-semibold text-stone-800">手動新增預約</h3>
               <button onClick={() => setShowAddModal(false)}
                 className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-stone-100 text-stone-400">
                 <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -668,7 +671,7 @@ export default function PickupPage() {
             <div className="p-4 border-t border-stone-100">
               <button onClick={handleManualAdd}
                 disabled={!addForm.availabilityId || !addForm.displayName.trim()}
-                className="w-full py-2.5 bg-amber-800 text-white rounded-xl text-[14px] font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors">
+                className="w-full py-2.5 bg-amber-800 text-white rounded-xl text-[13px] font-medium hover:bg-amber-900 disabled:opacity-50 transition-colors">
                 新增預約
               </button>
             </div>
