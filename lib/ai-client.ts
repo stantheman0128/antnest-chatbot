@@ -300,7 +300,7 @@ async function callGemini(
   ]);
 
   const modelId = modelOverride || configModel || DEFAULT_MODEL;
-  const fullPrompt = systemPrompt + "\n" + instruction;
+  const fullPrompt = systemPrompt + "\n\n<!-- output instructions -->\n" + instruction;
 
   const model = genAI.getGenerativeModel({
     model: modelId,

@@ -34,6 +34,9 @@ function assemblePrompt(
 ): string {
   const get = (key: string) => config.get(key) || "";
 
+  // Strip XML-like tags from product text to prevent prompt injection
+  const stripTags = (s: string) => s.replace(/<\/?[a-zA-Z_][a-zA-Z0-9_]*[^>]*>/g, "");
+
   // Build <products> section from DB products (with variant info and stock status)
   const productsXml = products
     .map((p) => {
@@ -46,11 +49,11 @@ function assemblePrompt(
         if (structured) {
           return `<product id="${p.id}">\n名稱：${p.name}\n價格：${p.price}\n${renderForPrompt(structured)}${stockLabel}\n</product>`;
         }
-        // Legacy plain text: dump as-is
-        return `<product id="${p.id}">\n${p.detailedDescription}${stockLabel}\n</product>`;
+        // Legacy plain text: sanitize and dump
+        return `<product id="${p.id}">\n${stripTags(p.detailedDescription)}${stockLabel}\n</product>`;
       }
 
-      let body = `名稱：${p.name}\n價格：${p.price}\n特色：${p.description}${stockLabel}`;
+      let body = `名稱：${p.name}\n價格：${p.price}\n特色：${stripTags(p.description)}${stockLabel}`;
       if (p.variants.length > 0) {
         const variantLines = p.variants.map((v) => {
           const name = v.option1 || v.title;
