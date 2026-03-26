@@ -108,6 +108,7 @@ function assemblePrompt(
     wrap("brand_story", get("brand_story")),
     wrap("contact", get("contact")),
     wrap("ordering_process", get("ordering_process")),
+    wrap("next_order_announcement", get("next_order_announcement")),
     "</knowledge_base>",
     wrap("reminders", get("reminders")),
   ];
