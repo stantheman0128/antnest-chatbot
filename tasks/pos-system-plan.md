@@ -55,6 +55,7 @@
 ### 為什麼不用 Medusa.js
 
 螞蟻窩的「開單制」跟傳統電商差異太大：
+
 - 批次開單 + 限時限量 + 截單後庫存凍結 → Medusa 沒有這個概念
 - 退貨不釋出庫存 → 需要自定義庫存邏輯
 - 每批獨立成本/利潤計算 → Medusa 沒有財務模組
@@ -134,12 +135,12 @@ AdminUser（管理員）
 
 ### 關鍵設計決策
 
-| 需求 | 設計 |
-|------|------|
-| 截單後退貨不釋出庫存 | `quantitySold` 只在下單時 +1，退貨時**不** -1 |
-| 自動上架 | Cron job 每分鐘檢查 `scheduledOpenAt`，到時間就把 status 改為 ACTIVE |
-| 剩餘數量 | 即時計算 `quantityLimit - quantitySold`，前端顯示 |
-| 不取貨不自動退款 | 超商回報退回時，`refundStatus` 設為 `PENDING_REVIEW`，闆娘在後台決定 |
+| 需求                 | 設計                                                                 |
+| -------------------- | -------------------------------------------------------------------- |
+| 截單後退貨不釋出庫存 | `quantitySold` 只在下單時 +1，退貨時**不** -1                        |
+| 自動上架             | Cron job 每分鐘檢查 `scheduledOpenAt`，到時間就把 status 改為 ACTIVE |
+| 剩餘數量             | 即時計算 `quantityLimit - quantitySold`，前端顯示                    |
+| 不取貨不自動退款     | 超商回報退回時，`refundStatus` 設為 `PENDING_REVIEW`，闆娘在後台決定 |
 
 ---
 
@@ -148,6 +149,7 @@ AdminUser（管理員）
 ### Phase 1：核心系統（MVP）
 
 #### 1A. 商品 & 開單管理（後台）
+
 - [ ] 商品 CRUD（名稱、描述、圖片、成本、分類、口味變體）
 - [ ] 開單 CRUD（建立批次、指定商品與數量、設定售價）
 - [ ] 開單排程（設定自動上架日期時間）
@@ -156,6 +158,7 @@ AdminUser（管理員）
 - [ ] 售完自動截止（剩餘 = 0 時自動 CLOSED）
 
 #### 1B. 商店前台
+
 - [ ] 商品列表頁（只顯示 ACTIVE 批次的商品）
 - [ ] 商品詳情頁（圖片、描述、價格、剩餘數量即時顯示）
 - [ ] 購物車
@@ -163,6 +166,7 @@ AdminUser（管理員）
 - [ ] 訂單完成頁 + 訂單查詢頁
 
 #### 1C. 金流串接（ECPay）
+
 - [ ] 信用卡付款
 - [ ] 貨到付款
 - [ ] 分期付款
@@ -170,6 +174,7 @@ AdminUser（管理員）
 - [ ] CheckMacValue 驗證
 
 #### 1D. 會員系統
+
 - [ ] 註冊（姓名、email、電話、生日）
 - [ ] LINE Login 整合（NextAuth LINE Provider）
 - [ ] 會員中心：我的訂單、基本資料修改
@@ -180,6 +185,7 @@ AdminUser（管理員）
 ### Phase 2：物流 & 訂單追蹤
 
 > **物流研究結論（2026-03 更新）**
+>
 > - 甜點需要冷凍出貨（-18°C）
 > - **全家冷凍 B2C**：日翊物流直接費率 NT$145(S60)/NT$155(S105)（來源：Cyberbiz 文件）
 >   - 目前走 Cyberbiz = NT$190，可省 NT$35–45
@@ -193,6 +199,7 @@ AdminUser（管理員）
 > - **自建系統路線**：ECPay Logistics API 串接全家冷凍 + 7-11 冷凍
 
 #### 2A. 物流串接
+
 - [ ] ECPay 物流 API — 全家冷凍 B2C（日翊物流）
   - 建立物流訂單 → 取得託運單號
   - 一鍵批次建立（整批訂單一次產生託運單）
@@ -203,6 +210,7 @@ AdminUser（管理員）
 - [ ] 自取選項（串接已開發的預約系統）
 
 #### 2B. 訂單列表 & 追蹤（後台）
+
 - [ ] 訂單列表：篩選（批次、狀態、配送方式）
 - [ ] 每筆訂單顯示：
   - 訂單編號、會員名稱
@@ -216,6 +224,7 @@ AdminUser（管理員）
 - [ ] 批次總覽：這批還有幾筆未出貨 / 未取貨
 
 #### 2C. 未取貨處理
+
 - [ ] 超商退回 webhook → 訂單標記 RETURNED + refundStatus = PENDING_REVIEW
 - [ ] 後台「待處理退貨」列表
 - [ ] 闆娘可選：退款 / 聯繫客人重寄 / 不處理
@@ -226,6 +235,7 @@ AdminUser（管理員）
 ### Phase 3：LINE 通知
 
 #### 3A. LINE 推播通知
+
 - [ ] 訂單成立通知（Flex Message 卡片：商品、金額、訂單編號）
 - [ ] 出貨通知（含物流單號）
 - [ ] 到貨通知（「您的包裹已到 XX 門市，請於 X 天內取貨」）
@@ -233,6 +243,7 @@ AdminUser（管理員）
 - [ ] 退貨通知（「您的包裹已退回，請聯繫我們」）
 
 #### 3B. LINE Bot 基本互動
+
 - [ ] 查詢訂單狀態（輸入訂單編號）
 - [ ] 連結到商店前台
 - [ ] Rich Menu 設定（商品目錄 / 我的訂單 / 聯絡客服）
@@ -242,6 +253,7 @@ AdminUser（管理員）
 ### Phase 4：財務報表 & 分析
 
 #### 4A. 批次利潤報表
+
 - [ ] 每批銷售額總計
 - [ ] 每批成本總計（商品成本 × 數量）
 - [ ] 毛利 = 銷售額 - 成本
@@ -250,12 +262,14 @@ AdminUser（管理員）
 - [ ] 匯出 CSV/Excel
 
 #### 4B. 財務儀表板
+
 - [ ] 月營收趨勢圖
 - [ ] 各商品銷售排行
 - [ ] 毛利率趨勢
 - [ ] 退貨率
 
 #### 4C. 會員分析
+
 - [ ] 年齡層分布（圓餅圖，依生日計算）
 - [ ] 回購率
 - [ ] 平均客單價
@@ -265,19 +279,19 @@ AdminUser（管理員）
 
 ## 四、技術選型
 
-| 項目 | 選擇 | 理由 |
-|------|------|------|
-| 框架 | **Next.js 15 (App Router)** | 全棧、SSR、API Routes、現有專案基礎 |
-| ORM | **Prisma** | TypeScript 原生、migration 管理、type-safe |
-| 資料庫 | **Supabase (PostgreSQL)** | 免費額度、Auth 內建、Storage、Realtime |
-| Auth | **NextAuth.js + Supabase** | LINE Provider 內建、session 管理 |
-| UI | **shadcn/ui + Tailwind CSS** | 後台元件豐富、可客製化 |
-| 圖表 | **Recharts** | 輕量、React 原生、報表用 |
-| 金流 | **ECPay AIO API** | 台灣主流、信用卡+貨到+分期一次搞定 |
-| 物流 | **ECPay Logistics API** | 全家冷凍 B2C + 7-11 冷凍 B2C（需冷凍出貨）|
-| LINE | **@line/bot-sdk + NextAuth LINE** | 推播 + 登入 |
-| 排程 | **Vercel Cron Jobs** | 自動上架、未取貨提醒（免費方案每日 1 次，Pro 每分鐘）|
-| 部署 | **Vercel** | 現有基礎、自動部署、Edge Functions |
+| 項目   | 選擇                              | 理由                                                  |
+| ------ | --------------------------------- | ----------------------------------------------------- |
+| 框架   | **Next.js 15 (App Router)**       | 全棧、SSR、API Routes、現有專案基礎                   |
+| ORM    | **Prisma**                        | TypeScript 原生、migration 管理、type-safe            |
+| 資料庫 | **Supabase (PostgreSQL)**         | 免費額度、Auth 內建、Storage、Realtime                |
+| Auth   | **NextAuth.js + Supabase**        | LINE Provider 內建、session 管理                      |
+| UI     | **shadcn/ui + Tailwind CSS**      | 後台元件豐富、可客製化                                |
+| 圖表   | **Recharts**                      | 輕量、React 原生、報表用                              |
+| 金流   | **ECPay AIO API**                 | 台灣主流、信用卡+貨到+分期一次搞定                    |
+| 物流   | **ECPay Logistics API**           | 全家冷凍 B2C + 7-11 冷凍 B2C（需冷凍出貨）            |
+| LINE   | **@line/bot-sdk + NextAuth LINE** | 推播 + 登入                                           |
+| 排程   | **Vercel Cron Jobs**              | 自動上架、未取貨提醒（免費方案每日 1 次，Pro 每分鐘） |
+| 部署   | **Vercel**                        | 現有基礎、自動部署、Edge Functions                    |
 
 ---
 
@@ -332,12 +346,12 @@ antnest-pos/
 
 ## 六、開發時程估算
 
-| 階段 | 範圍 | 預估 |
-|------|------|------|
-| Phase 1 | 商品、開單、前台、金流、會員 | 核心功能 |
-| Phase 2 | 物流串接、訂單追蹤、退貨處理 | 最複雜的整合 |
-| Phase 3 | LINE 通知 | 已有 bot-sdk 基礎 |
-| Phase 4 | 報表、財務、分析 | 數據呈現 |
+| 階段    | 範圍                         | 預估              |
+| ------- | ---------------------------- | ----------------- |
+| Phase 1 | 商品、開單、前台、金流、會員 | 核心功能          |
+| Phase 2 | 物流串接、訂單追蹤、退貨處理 | 最複雜的整合      |
+| Phase 3 | LINE 通知                    | 已有 bot-sdk 基礎 |
+| Phase 4 | 報表、財務、分析             | 數據呈現          |
 
 > Phase 1 做完就能取代 CyberBiz 上線。
 
@@ -354,9 +368,9 @@ antnest-pos/
 
 ## 八、跟現有 antnest-chatbot 的關係
 
-| 項目 | 現有 chatbot | 新 POS 系統 |
-|------|------------|-----------|
-| 定位 | LINE 客服機器人（問答） | 完整銷售+營運系統 |
-| 共用 | 商品知識庫、LINE channel | 同一個 LINE 官方帳號 |
-| 建議 | 保留為獨立服務 | 新開 `antnest-pos` 專案 |
-| 整合 | POS 的 LINE webhook 可轉發「非訂單問題」給 chatbot | 訂單相關由 POS 處理 |
+| 項目 | 現有 chatbot                                       | 新 POS 系統             |
+| ---- | -------------------------------------------------- | ----------------------- |
+| 定位 | LINE 客服機器人（問答）                            | 完整銷售+營運系統       |
+| 共用 | 商品知識庫、LINE channel                           | 同一個 LINE 官方帳號    |
+| 建議 | 保留為獨立服務                                     | 新開 `antnest-pos` 專案 |
+| 整合 | POS 的 LINE webhook 可轉發「非訂單問題」給 chatbot | 訂單相關由 POS 處理     |

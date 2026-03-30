@@ -1,38 +1,39 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from 'react';
+
+import { useRouter } from 'next/navigation';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
+    setError('');
     setLoading(true);
 
     try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; token?: string };
 
       if (!res.ok) {
-        setError(data.error || "登入失敗");
+        setError(data.error || '登入失敗');
         return;
       }
 
-      localStorage.setItem("admin_token", data.token);
-      router.replace("/admin");
+      localStorage.setItem('admin_token', data.token || '');
+      router.replace('/admin');
     } catch {
-      setError("網路錯誤，請稍後再試");
+      setError('網路錯誤，請稍後再試');
     } finally {
       setLoading(false);
     }
@@ -48,19 +49,57 @@ export default function AdminLoginPage() {
               <ellipse cx="12" cy="7" rx="3" ry="2" fill="white" opacity="0.95" />
               <ellipse cx="12" cy="13.5" rx="3.5" ry="2.5" fill="white" opacity="0.95" />
               <ellipse cx="12" cy="19.5" rx="2.5" ry="1.8" fill="white" opacity="0.7" />
-              <line x1="9" y1="12" x2="5.5" y2="10.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
-              <line x1="9" y1="14" x2="5.5" y2="15" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
-              <line x1="15" y1="12" x2="18.5" y2="10.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
-              <line x1="15" y1="14" x2="18.5" y2="15" stroke="white" strokeWidth="1.4" strokeLinecap="round" opacity="0.8" />
+              <line
+                x1="9"
+                y1="12"
+                x2="5.5"
+                y2="10.5"
+                stroke="white"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                opacity="0.8"
+              />
+              <line
+                x1="9"
+                y1="14"
+                x2="5.5"
+                y2="15"
+                stroke="white"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                opacity="0.8"
+              />
+              <line
+                x1="15"
+                y1="12"
+                x2="18.5"
+                y2="10.5"
+                stroke="white"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                opacity="0.8"
+              />
+              <line
+                x1="15"
+                y1="14"
+                x2="18.5"
+                y2="15"
+                stroke="white"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                opacity="0.8"
+              />
             </svg>
           </div>
-          <h1 className="text-[17px] font-semibold text-stone-800 tracking-tight">螞蟻窩管理後台</h1>
+          <h1 className="text-[17px] font-semibold text-stone-800 tracking-tight">
+            螞蟻窩管理後台
+          </h1>
           <p className="text-[11px] text-stone-400 mt-0.5">請登入以繼續</p>
         </div>
 
         {/* Form */}
         <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm">
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={(e) => void handleLogin(e)} className="space-y-4">
             <div>
               <label className="block text-[10px] font-semibold text-stone-400 mb-1.5 uppercase tracking-widest">
                 Email
@@ -89,9 +128,7 @@ export default function AdminLoginPage() {
                 required
                 autoComplete="current-password"
               />
-              {error && (
-                <p className="mt-2 text-[11px] text-red-500">{error}</p>
-              )}
+              {error && <p className="mt-2 text-[11px] text-red-500">{error}</p>}
             </div>
 
             <button
@@ -102,13 +139,24 @@ export default function AdminLoginPage() {
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
                   </svg>
                   登入中
                 </span>
               ) : (
-                "登入"
+                '登入'
               )}
             </button>
           </form>

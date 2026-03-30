@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminLogin } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from 'next/server';
+
+import { verifyAdminLogin } from '@/lib/admin-auth';
 
 // In-memory rate limiter: max 5 failed attempts per IP per 15 minutes
 const attempts = new Map<string, { count: number; resetAt: number }>();
@@ -8,9 +9,9 @@ const WINDOW_MS = 15 * 60 * 1000;
 
 function getClientIp(req: NextRequest): string {
   return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
   );
 }
 
@@ -40,25 +41,22 @@ export async function POST(req: NextRequest) {
 
   if (isRateLimited(ip)) {
     return NextResponse.json(
-      { error: "Too many login attempts. Please try again in 15 minutes." },
-      { status: 429 }
+      { error: 'Too many login attempts. Please try again in 15 minutes.' },
+      { status: 429 },
     );
   }
 
   let body: { email?: string; password?: string };
   try {
-    body = await req.json();
+    body = (await req.json()) as { email?: string; password?: string };
   } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   const { email, password } = body;
 
   if (!email || !password) {
-    return NextResponse.json(
-      { error: "Email and password required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
   }
 
   const result = await verifyAdminLogin(email, password);
@@ -66,7 +64,7 @@ export async function POST(req: NextRequest) {
   if (!result.valid) {
     recordFailure(ip);
     // Return generic error — don't reveal which field was wrong
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
 
   // Clear failure record on success

@@ -1,8 +1,9 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getSystemPrompt } from "./knowledge-base";
-import { getActiveProducts } from "./data-service";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-interface MessageHistory {
+import { getActiveProducts } from './data-service';
+import { getSystemPrompt } from './knowledge-base';
+
+export interface MessageHistory {
   role: string;
   content: string;
 }
@@ -23,13 +24,13 @@ export interface AIResponse {
 
 function getAIClient() {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey || apiKey === "your_google_ai_key_here") {
+  if (!apiKey || apiKey === 'your_google_ai_key_here') {
     throw new Error(
-      "GOOGLE_AI_API_KEY not configured. Please:\n" +
-      "1. Visit https://aistudio.google.com/apikey\n" +
-      "2. Create a new API key\n" +
-      "3. Add it to .env.local as: GOOGLE_AI_API_KEY=your_actual_key\n" +
-      "4. Restart the development server"
+      'GOOGLE_AI_API_KEY not configured. Please:\n' +
+        '1. Visit https://aistudio.google.com/apikey\n' +
+        '2. Create a new API key\n' +
+        '3. Add it to .env.local as: GOOGLE_AI_API_KEY=your_actual_key\n' +
+        '4. Restart the development server',
     );
   }
   return new GoogleGenerativeAI(apiKey);
@@ -44,7 +45,7 @@ async function getProductCardInstruction(): Promise<{
 }> {
   const products = await getActiveProducts();
   const validIds = products.map((p) => p.id);
-  const idList = validIds.join(", ");
+  const idList = validIds.join(', ');
 
   const instruction = `
 <product_cards>
@@ -123,23 +124,23 @@ function stripMarkdown(text: string): string {
   return (
     text
       // Bold: **text** or __text__
-      .replace(/\*\*(.+?)\*\*/g, "$1")
-      .replace(/__(.+?)__/g, "$1")
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/__(.+?)__/g, '$1')
       // Italic: *text* or _text_ (but not emoji patterns like *_*)
-      .replace(/(?<!\w)\*([^*\n]+?)\*(?!\w)/g, "$1")
-      .replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, "$1")
+      .replace(/(?<!\w)\*([^*\n]+?)\*(?!\w)/g, '$1')
+      .replace(/(?<!\w)_([^_\n]+?)_(?!\w)/g, '$1')
       // Headers: # ## ### etc at line start
-      .replace(/^#{1,6}\s+/gm, "")
+      .replace(/^#{1,6}\s+/gm, '')
       // Inline code: `text`
-      .replace(/`([^`]+?)`/g, "$1")
+      .replace(/`([^`]+?)`/g, '$1')
       // Links: [text](url) → text
-      .replace(/\[([^\]]+?)\]\([^)]+?\)/g, "$1")
+      .replace(/\[([^\]]+?)\]\([^)]+?\)/g, '$1')
       // Unordered list markers: - or * at line start → •
-      .replace(/^[\s]*[-*]\s+/gm, "• ")
+      .replace(/^[\s]*[-*]\s+/gm, '• ')
       // Blockquotes: > at line start
-      .replace(/^>\s?/gm, "")
+      .replace(/^>\s?/gm, '')
       // Horizontal rules: --- or *** or ___
-      .replace(/^[-*_]{3,}\s*$/gm, "")
+      .replace(/^[-*_]{3,}\s*$/gm, '')
   );
 }
 
@@ -147,28 +148,35 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
   const trimmedRaw = raw.trim();
 
   // SKIP signal — AI decided not to respond
-  if (trimmedRaw === "SKIP" || trimmedRaw.startsWith("SKIP:") || trimmedRaw.startsWith("SKIP\n")) {
-    return { text: "", productSpecs: [], escalate: false, escalateReason: "", skip: true, showPickupLink: false };
+  if (trimmedRaw === 'SKIP' || trimmedRaw.startsWith('SKIP:') || trimmedRaw.startsWith('SKIP\n')) {
+    return {
+      text: '',
+      productSpecs: [],
+      escalate: false,
+      escalateReason: '',
+      skip: true,
+      showPickupLink: false,
+    };
   }
 
-  const lines = raw.split("\n");
+  const lines = raw.split('\n');
   const productSpecs: ProductSpec[] = [];
   const textLines: string[] = [];
   let escalate = false;
-  let escalateReason = "";
+  let escalateReason = '';
   let showPickupLink = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("SHOW_PRODUCTS:")) {
+    if (trimmed.startsWith('SHOW_PRODUCTS:')) {
       const entries = trimmed
-        .replace("SHOW_PRODUCTS:", "")
-        .split(",")
+        .replace('SHOW_PRODUCTS:', '')
+        .split(',')
         .map((e) => e.trim())
         .filter(Boolean);
       for (const entry of entries) {
         // Support "product-id/variant-name" format
-        const slashIdx = entry.indexOf("/");
+        const slashIdx = entry.indexOf('/');
         if (slashIdx > 0) {
           const id = entry.slice(0, slashIdx);
           const variantName = entry.slice(slashIdx + 1);
@@ -179,10 +187,10 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
           productSpecs.push({ id: entry });
         }
       }
-    } else if (trimmed.startsWith("ESCALATE:")) {
+    } else if (trimmed.startsWith('ESCALATE:')) {
       escalate = true;
-      escalateReason = trimmed.replace("ESCALATE:", "").trim();
-    } else if (trimmed === "SHOW_PICKUP_LINK" || trimmed.startsWith("SHOW_PICKUP_LINK:")) {
+      escalateReason = trimmed.replace('ESCALATE:', '').trim();
+    } else if (trimmed === 'SHOW_PICKUP_LINK' || trimmed.startsWith('SHOW_PICKUP_LINK:')) {
       showPickupLink = true;
     } else {
       textLines.push(line);
@@ -190,12 +198,12 @@ function parseAIResponse(raw: string, validIds: string[]): AIResponse {
   }
 
   // Remove trailing empty lines
-  while (textLines.length > 0 && textLines[textLines.length - 1].trim() === "") {
+  while (textLines.length > 0 && textLines[textLines.length - 1].trim() === '') {
     textLines.pop();
   }
 
   return {
-    text: stripMarkdown(textLines.join("\n")),
+    text: stripMarkdown(textLines.join('\n')),
     productSpecs,
     escalate,
     escalateReason,
@@ -213,7 +221,7 @@ export function splitResponse(text: string, maxSegments = 3): string[] {
   const trimmed = text.trim();
 
   // Short enough → don't split
-  const lineCount = trimmed.split("\n").length;
+  const lineCount = trimmed.split('\n').length;
   if (lineCount <= 8) return [trimmed];
 
   // Split at double-newline paragraph breaks
@@ -223,11 +231,11 @@ export function splitResponse(text: string, maxSegments = 3): string[] {
 
   // Merge paragraphs into segments, keeping each under ~8 lines
   const segments: string[] = [];
-  let current = "";
+  let current = '';
 
   for (const para of paragraphs) {
-    const combined = current ? current + "\n\n" + para : para;
-    const combinedLines = combined.split("\n").length;
+    const combined = current ? current + '\n\n' + para : para;
+    const combinedLines = combined.split('\n').length;
 
     if (combinedLines > 8 && current) {
       segments.push(current.trim());
@@ -241,7 +249,7 @@ export function splitResponse(text: string, maxSegments = 3): string[] {
   // Cap at maxSegments — merge overflow into last segment
   while (segments.length > maxSegments) {
     const last = segments.pop()!;
-    segments[segments.length - 1] += "\n\n" + last;
+    segments[segments.length - 1] += '\n\n' + last;
   }
 
   return segments.filter((s) => s.length > 0);
@@ -258,7 +266,7 @@ function sanitizeUserInput(message: string): string {
   }
 
   // Strip XML-like tags that could interfere with system prompt structure
-  sanitized = sanitized.replace(/<\/?[a-zA-Z_][a-zA-Z0-9_]*[^>]*>/g, "");
+  sanitized = sanitized.replace(/<\/?[a-zA-Z_][a-zA-Z0-9_]*[^>]*>/g, '');
 
   // Neutralize common injection patterns (both English and Chinese)
   const injectionPatterns = [
@@ -275,32 +283,32 @@ function sanitizeUserInput(message: string): string {
   ];
 
   for (const pattern of injectionPatterns) {
-    sanitized = sanitized.replace(pattern, "[filtered]");
+    sanitized = sanitized.replace(pattern, '[filtered]');
   }
 
   return sanitized;
 }
 
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
-const FAILOVER_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+const FAILOVER_MODEL = 'gemini-2.5-flash';
 
 async function callGemini(
   message: string,
   history: MessageHistory[],
-  modelOverride?: string
+  modelOverride?: string,
 ): Promise<{ text: string; validIds: string[]; model: string }> {
   const genAI = getAIClient();
 
   // Load system prompt, product card instruction, and admin-configured model in parallel
-  const { getConfig } = await import("./data-service");
+  const { getConfig } = await import('./data-service');
   const [systemPrompt, { instruction, validIds }, configModel] = await Promise.all([
     getSystemPrompt(),
     getProductCardInstruction(),
-    getConfig("ai_model"),
+    getConfig('ai_model'),
   ]);
 
   const modelId = modelOverride || configModel || DEFAULT_MODEL;
-  const fullPrompt = systemPrompt + "\n\n<!-- output instructions -->\n" + instruction;
+  const fullPrompt = systemPrompt + '\n\n<!-- output instructions -->\n' + instruction;
 
   const model = genAI.getGenerativeModel({
     model: modelId,
@@ -310,12 +318,12 @@ async function callGemini(
   const contents = history
     .filter((msg) => msg.role && msg.content)
     .map((msg) => ({
-      role: msg.role === "user" ? "user" : "model",
+      role: msg.role === 'user' ? 'user' : 'model',
       parts: [{ text: msg.content }],
     }));
 
   contents.push({
-    role: "user",
+    role: 'user',
     parts: [{ text: sanitizeUserInput(message) }],
   });
 
@@ -327,14 +335,14 @@ async function callGemini(
     },
   });
 
-  return { text: response.response.text() || "", validIds, model: modelId };
+  return { text: response.response.text() || '', validIds, model: modelId };
 }
 
 const FALLBACK: AIResponse = {
-  text: "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+  text: '抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com',
   productSpecs: [],
   escalate: false,
-  escalateReason: "",
+  escalateReason: '',
   skip: false,
   showPickupLink: false,
 };
@@ -344,7 +352,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   return Promise.race([
     promise,
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)
+      setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms),
     ),
   ]);
 }
@@ -357,42 +365,48 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  */
 export async function generateAIResponse(
   message: string,
-  history: MessageHistory[] = []
+  history: MessageHistory[] = [],
 ): Promise<AIResponse> {
   // Attempt 1: primary model (fast, with 8s timeout)
   try {
     const startTime = Date.now();
-    const { text: textContent, validIds, model } = await withTimeout(
-      callGemini(message, history),
-      8000,
-      "primary"
-    );
+    const {
+      text: textContent,
+      validIds,
+      model,
+    } = await withTimeout(callGemini(message, history), 8000, 'primary');
     const latencyMs = Date.now() - startTime;
-    console.log(`[AI] model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`);
+    console.log(
+      `[AI] model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`,
+    );
 
     if (textContent) {
       return parseAIResponse(textContent, validIds);
     }
-  } catch (error: any) {
-    console.warn(`[AI] Primary model failed: ${error?.message}`);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`[AI] Primary model failed: ${msg}`);
   }
 
   // Attempt 2: failover model (smarter, with 15s timeout)
   try {
     const startTime = Date.now();
-    const { text: textContent, validIds, model } = await withTimeout(
-      callGemini(message, history, FAILOVER_MODEL),
-      15000,
-      "failover"
-    );
+    const {
+      text: textContent,
+      validIds,
+      model,
+    } = await withTimeout(callGemini(message, history, FAILOVER_MODEL), 15000, 'failover');
     const latencyMs = Date.now() - startTime;
-    console.log(`[AI] failover model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`);
+    console.log(
+      `[AI] failover model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`,
+    );
 
     if (textContent) {
       return parseAIResponse(textContent, validIds);
     }
-  } catch (error: any) {
-    console.error(`[AI] Failover model also failed: ${error?.message}`);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[AI] Failover model also failed: ${msg}`);
   }
 
   return FALLBACK;
@@ -403,33 +417,35 @@ export async function generateAIResponse(
  * Used in admin dashboard to quickly understand what a customer is asking about.
  */
 export async function generateConversationSummary(
-  messages: Array<{ role: string; content: string }>
+  messages: Array<{ role: string; content: string }>,
 ): Promise<string> {
-  if (messages.length === 0) return "尚無對話紀錄";
+  if (messages.length === 0) return '尚無對話紀錄';
 
   try {
     const genAI = getAIClient();
     const model = genAI.getGenerativeModel({
       model: FAILOVER_MODEL,
-      systemInstruction: "你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。",
+      systemInstruction:
+        '你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。',
     });
 
     const conversationText = messages
-      .map((m) => (m.role === "user" ? "顧客：" : "客服：") + m.content)
-      .join("\n");
+      .map((m) => (m.role === 'user' ? '顧客：' : '客服：') + m.content)
+      .join('\n');
 
     const response = await withTimeout(
       model.generateContent({
-        contents: [{ role: "user", parts: [{ text: conversationText }] }],
+        contents: [{ role: 'user', parts: [{ text: conversationText }] }],
         generationConfig: { maxOutputTokens: 2048, temperature: 0.3 },
       }),
       20000,
-      "summary"
+      'summary',
     );
 
-    return response.response.text()?.trim() || "無法生成摘要";
-  } catch (e: any) {
-    console.error("generateConversationSummary error:", e?.message);
-    return "摘要生成失敗";
+    return response.response.text()?.trim() || '無法生成摘要';
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('generateConversationSummary error:', msg);
+    return '摘要生成失敗';
   }
 }

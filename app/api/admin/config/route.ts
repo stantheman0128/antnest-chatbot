@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getAllConfigs, getConfig, setConfig } from "@/lib/data-service";
-import { verifyAdmin } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from 'next/server';
+
+import { verifyAdmin } from '@/lib/admin-auth';
+import { getAllConfigs, getConfig, setConfig } from '@/lib/data-service';
 
 // Max character limits per config key
 const CONFIG_MAX_LENGTHS: Record<string, number> = {
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req);
   if (authError) return authError;
 
-  const key = req.nextUrl.searchParams.get("key");
+  const key = req.nextUrl.searchParams.get('key');
   if (key) {
     const value = await getConfig(key);
     return NextResponse.json({ key, value });
@@ -63,27 +64,21 @@ export async function POST(req: NextRequest) {
   const authError = await verifyAdmin(req);
   if (authError) return authError;
 
-  const { key, value } = await req.json();
+  const { key, value } = (await req.json()) as { key: string; value: string };
   if (!key || value === undefined) {
-    return NextResponse.json(
-      { error: "key and value are required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'key and value are required' }, { status: 400 });
   }
 
-  if (typeof value !== "string") {
-    return NextResponse.json(
-      { error: "value must be a string" },
-      { status: 400 }
-    );
+  if (typeof value !== 'string') {
+    return NextResponse.json({ error: 'value must be a string' }, { status: 400 });
   }
 
   // Check length limit
-  const maxLength = CONFIG_MAX_LENGTHS[key] || DEFAULT_MAX_LENGTH;
+  const maxLength = CONFIG_MAX_LENGTHS[key] ?? DEFAULT_MAX_LENGTH;
   if (value.length > maxLength) {
     return NextResponse.json(
       { error: `值超過上限 ${maxLength} 字元（目前 ${value.length} 字）` },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -98,17 +93,17 @@ export async function POST(req: NextRequest) {
   if (previousValue !== null && previousValue !== value) {
     console.log(
       `[CONFIG AUDIT] key="${key}" changed at ${new Date().toISOString()}` +
-      ` | prev_length=${previousValue.length} | new_length=${value.length}`
+        ` | prev_length=${previousValue.length} | new_length=${value.length}`,
     );
   }
 
   const ok = await setConfig(key, value);
   if (!ok) {
-    return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
   }
 
   return NextResponse.json({
     success: true,
-    ...(warnings.length > 0 ? { warnings: ["內容包含可能的注入語句，請確認是否正確"] } : {}),
+    ...(warnings.length > 0 ? { warnings: ['內容包含可能的注入語句，請確認是否正確'] } : {}),
   });
 }

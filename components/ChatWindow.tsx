@@ -1,21 +1,22 @@
-"use client";
+'use client';
 
-import { useState, useRef, useEffect } from "react";
-import MessageBubble from "./MessageBubble";
-import ChatInput from "./ChatInput";
-import QuickReplies from "./QuickReplies";
+import { useEffect, useRef, useState } from 'react';
+
+import ChatInput from './ChatInput';
+import MessageBubble from './MessageBubble';
+import QuickReplies from './QuickReplies';
 
 interface Message {
-  role: "user" | "bot";
+  role: 'user' | 'bot';
   content: string;
-  source?: "template" | "ai" | "error";
+  source?: 'template' | 'ai' | 'error';
 }
 
 const WELCOME_MESSAGE: Message = {
-  role: "bot",
+  role: 'bot',
   content:
-    "你好！🐜 我是螞蟻窩甜點的智能客服小蟻～\n\n很高興為你服務！你可以直接打字問我問題，或點選下方的常見問題快速查詢。\n\n我可以幫你查詢商品資訊、價格、運費、付款方式等等喔！😊",
-  source: "template",
+    '你好！🐜 我是螞蟻窩甜點的智能客服小蟻～\n\n很高興為你服務！你可以直接打字問我問題，或點選下方的常見問題快速查詢。\n\n我可以幫你查詢商品資訊、價格、運費、付款方式等等喔！😊',
+  source: 'template',
 };
 
 export default function ChatWindow() {
@@ -25,7 +26,7 @@ export default function ChatWindow() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function ChatWindow() {
   }, [messages]);
 
   const sendMessage = async (text: string) => {
-    const userMessage: Message = { role: "user", content: text };
+    const userMessage: Message = { role: 'user', content: text };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setShowQuickReplies(false);
@@ -42,23 +43,21 @@ export default function ChatWindow() {
       const history = messages
         .filter((m) => m !== WELCOME_MESSAGE)
         .map((m) => ({
-          role: m.role === "bot" ? "assistant" : "user",
+          role: m.role === 'bot' ? 'assistant' : 'user',
           content: m.content,
         }));
 
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as { response?: string; source?: 'template' | 'ai' | 'error' };
 
       const botMessage: Message = {
-        role: "bot",
-        content:
-          data.response ||
-          "抱歉，我暫時無法回答，請直接聯繫客服 📞 0906367231",
+        role: 'bot',
+        content: data.response || '抱歉，我暫時無法回答，請直接聯繫客服 📞 0906367231',
         source: data.source,
       };
 
@@ -67,10 +66,10 @@ export default function ChatWindow() {
       setMessages((prev) => [
         ...prev,
         {
-          role: "bot",
+          role: 'bot',
           content:
-            "抱歉，連線似乎出了點問題 😥\n請稍後再試，或直接聯繫我們：\n📞 0906367231\n📧 evaboxbox@gmail.com",
-          source: "error",
+            '抱歉，連線似乎出了點問題 😥\n請稍後再試，或直接聯繫我們：\n📞 0906367231\n📧 evaboxbox@gmail.com',
+          source: 'error',
         },
       ]);
     } finally {
@@ -94,12 +93,7 @@ export default function ChatWindow() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto hide-scrollbar p-4 bg-[#FFF8F0]">
         {messages.map((msg, i) => (
-          <MessageBubble
-            key={i}
-            role={msg.role}
-            content={msg.content}
-            source={msg.source}
-          />
+          <MessageBubble key={i} role={msg.role} content={msg.content} source={msg.source} />
         ))}
         {isLoading && (
           <div className="flex justify-start mb-3">
@@ -119,10 +113,10 @@ export default function ChatWindow() {
       </div>
 
       {/* Quick Replies */}
-      <QuickReplies onSelect={sendMessage} show={showQuickReplies} />
+      <QuickReplies onSelect={(msg) => void sendMessage(msg)} show={showQuickReplies} />
 
       {/* Input */}
-      <ChatInput onSend={sendMessage} disabled={isLoading} />
+      <ChatInput onSend={(msg) => void sendMessage(msg)} disabled={isLoading} />
     </div>
   );
 }

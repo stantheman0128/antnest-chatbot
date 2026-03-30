@@ -11,4 +11,4 @@
  * - Analytics tracking for response effectiveness
  */
 
-export { matchIntent } from "./intent-matcher";
+export { matchIntent } from './intent-matcher';

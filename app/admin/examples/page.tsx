@@ -1,7 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { getToken, useToast } from "@/lib/admin-utils";
+import { useCallback, useEffect, useState } from 'react';
+
+import { getToken, useToast } from '@/lib/admin-utils';
 
 interface Example {
   id: string;
@@ -12,9 +13,9 @@ interface Example {
   sortOrder: number;
 }
 
-const EMPTY: Omit<Example, "id" | "sortOrder"> = {
-  customerMessage: "",
-  correctResponse: "",
+const EMPTY: Omit<Example, 'id' | 'sortOrder'> = {
+  customerMessage: '',
+  correctResponse: '',
   note: null,
   isActive: true,
 };
@@ -30,22 +31,22 @@ export default function ExamplesPage() {
   const [actionIds, setActionIds] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchExamples();
-  }, []);
-
-  async function fetchExamples() {
+  const fetchExamples = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/examples", {
+      const res = await fetch('/api/admin/examples', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setExamples(await res.json());
-      else toast("載入指令失敗", "error");
+      if (res.ok) setExamples(await res.json() as Example[]);
+      else toast('載入指令失敗', 'error');
     } catch {
-      toast("載入指令失敗", "error");
+      toast('載入指令失敗', 'error');
     }
     setLoading(false);
-  }
+  }, [toast]);
+
+  useEffect(() => {
+    void fetchExamples();
+  }, [fetchExamples]);
 
   function openNew() {
     setModal({ open: true, editing: { ...EMPTY } });
@@ -66,24 +67,24 @@ export default function ExamplesPage() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/examples", {
-        method: "POST",
+      const res = await fetch('/api/admin/examples', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
         body: JSON.stringify(modal.editing),
       });
 
       if (res.ok) {
-        toast("儲存成功！即時生效中");
+        toast('儲存成功！即時生效中');
         closeModal();
         await fetchExamples();
       } else {
-        toast("儲存失敗", "error");
+        toast('儲存失敗', 'error');
       }
     } catch {
-      toast("網路錯誤", "error");
+      toast('網路錯誤', 'error');
     }
     setSaving(false);
   }
@@ -92,46 +93,52 @@ export default function ExamplesPage() {
     setActionIds((prev) => new Set(prev).add(id));
     try {
       const res = await fetch(`/api/admin/examples?id=${id}`, {
-        method: "DELETE",
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) {
         setExamples((prev) => prev.filter((e) => e.id !== id));
-        toast("已刪除");
+        toast('已刪除');
       } else {
-        toast("刪除失敗", "error");
+        toast('刪除失敗', 'error');
       }
     } catch {
-      toast("網路錯誤", "error");
+      toast('網路錯誤', 'error');
     } finally {
-      setActionIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      setActionIds((prev) => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
     }
   }
 
   async function toggleActive(example: Example) {
     setActionIds((prev) => new Set(prev).add(example.id));
     try {
-      const res = await fetch("/api/admin/examples", {
-        method: "POST",
+      const res = await fetch('/api/admin/examples', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
         body: JSON.stringify({ ...example, isActive: !example.isActive }),
       });
       if (res.ok) {
         setExamples((prev) =>
-          prev.map((e) =>
-            e.id === example.id ? { ...e, isActive: !e.isActive } : e
-          )
+          prev.map((e) => (e.id === example.id ? { ...e, isActive: !e.isActive } : e)),
         );
       } else {
-        toast("操作失敗", "error");
+        toast('操作失敗', 'error');
       }
     } catch {
-      toast("網路錯誤", "error");
+      toast('網路錯誤', 'error');
     } finally {
-      setActionIds((prev) => { const n = new Set(prev); n.delete(example.id); return n; });
+      setActionIds((prev) => {
+        const n = new Set(prev);
+        n.delete(example.id);
+        return n;
+      });
     }
   }
 
@@ -148,9 +155,7 @@ export default function ExamplesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[17px] font-semibold text-stone-800">闆娘指令</h1>
-          <p className="text-[11px] text-stone-400 mt-0.5">
-            告訴小螞蟻遇到什麼情況該怎麼回答
-          </p>
+          <p className="text-[11px] text-stone-400 mt-0.5">告訴小螞蟻遇到什麼情況該怎麼回答</p>
         </div>
         <button
           onClick={openNew}
@@ -179,7 +184,7 @@ export default function ExamplesPage() {
           <div
             key={example.id}
             className={`bg-white rounded-2xl border border-stone-100 overflow-hidden ${
-              !example.isActive ? "opacity-50" : ""
+              !example.isActive ? 'opacity-50' : ''
             }`}
           >
             {/* Conversation preview */}
@@ -190,7 +195,9 @@ export default function ExamplesPage() {
                 </span>
               )}
               <div className="flex gap-2.5 items-start">
-                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0 text-right">情境</span>
+                <span className="text-[10px] text-stone-400 pt-1 w-10 shrink-0 text-right">
+                  情境
+                </span>
                 <div className="flex-1 bg-stone-100 rounded-2xl rounded-tl-md px-3 py-2">
                   <p className="text-[13px] text-stone-700 leading-relaxed">
                     {example.customerMessage}
@@ -219,18 +226,18 @@ export default function ExamplesPage() {
                 編輯
               </button>
               <button
-                onClick={() => toggleActive(example)}
+                onClick={() => void toggleActive(example)}
                 disabled={actionIds.has(example.id)}
                 className={`flex-1 py-2.5 text-[11px] font-medium transition-colors border-r border-stone-100 disabled:opacity-50 ${
                   example.isActive
-                    ? "text-stone-500 hover:bg-stone-50"
-                    : "text-amber-700 hover:bg-amber-50"
+                    ? 'text-stone-500 hover:bg-stone-50'
+                    : 'text-amber-700 hover:bg-amber-50'
                 }`}
               >
-                {example.isActive ? "停用" : "啟用"}
+                {example.isActive ? '停用' : '啟用'}
               </button>
               <button
-                onClick={() => remove(example.id)}
+                onClick={() => void remove(example.id)}
                 disabled={actionIds.has(example.id)}
                 className="flex-1 py-2.5 text-[11px] font-medium text-red-400 hover:bg-red-50 transition-colors disabled:opacity-50"
               >
@@ -247,7 +254,7 @@ export default function ExamplesPage() {
           <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden">
             <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
               <h3 className="text-[13px] font-semibold text-stone-800">
-                {modal.editing.id ? "編輯指令" : "新增指令"}
+                {modal.editing.id ? '編輯指令' : '新增指令'}
               </h3>
               <button
                 onClick={closeModal}
@@ -269,7 +276,7 @@ export default function ExamplesPage() {
                   什麼情況 *
                 </label>
                 <textarea
-                  value={modal.editing.customerMessage || ""}
+                  value={modal.editing.customerMessage || ''}
                   onChange={(e) =>
                     setModal((m) => ({
                       ...m,
@@ -287,7 +294,7 @@ export default function ExamplesPage() {
                   小螞蟻要怎麼回 *
                 </label>
                 <textarea
-                  value={modal.editing.correctResponse || ""}
+                  value={modal.editing.correctResponse || ''}
                   onChange={(e) =>
                     setModal((m) => ({
                       ...m,
@@ -306,7 +313,7 @@ export default function ExamplesPage() {
                 </label>
                 <input
                   type="text"
-                  value={modal.editing.note || ""}
+                  value={modal.editing.note || ''}
                   onChange={(e) =>
                     setModal((m) => ({
                       ...m,
@@ -327,7 +334,7 @@ export default function ExamplesPage() {
                 取消
               </button>
               <button
-                onClick={save}
+                onClick={() => void save()}
                 disabled={
                   saving ||
                   !modal.editing.customerMessage?.trim() ||
@@ -335,7 +342,7 @@ export default function ExamplesPage() {
                 }
                 className="flex-1 py-2.5 bg-amber-800 text-white rounded-xl text-[13px] font-medium hover:bg-amber-900 disabled:opacity-60 transition-colors"
               >
-                {saving ? "儲存中..." : "儲存"}
+                {saving ? '儲存中...' : '儲存'}
               </button>
             </div>
           </div>

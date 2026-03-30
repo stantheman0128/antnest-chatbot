@@ -1,35 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
-import { generateAIResponse } from "@/lib/ai-client";
+import { NextRequest, NextResponse } from 'next/server';
+
+import { type MessageHistory, generateAIResponse } from '@/lib/ai-client';
 
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, history } = await req.json();
+    const { message, history } = (await req.json()) as {
+      message: string;
+      history?: MessageHistory[];
+    };
 
-    if (!message || typeof message !== "string") {
-      return NextResponse.json(
-        { error: "Message is required" },
-        { status: 400 }
-      );
+    if (!message || typeof message !== 'string') {
+      return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
     const aiResponse = await generateAIResponse(message, history || []);
     return NextResponse.json({
       response: aiResponse.text,
       productIds: aiResponse.productSpecs.map((s) => s.id),
-      source: "ai",
+      source: 'ai',
     });
   } catch (error) {
-    console.error("Chat API error:", error);
+    console.error('Chat API error:', error);
     return NextResponse.json(
       {
         response:
-          "抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com",
+          '抱歉，系統暫時有點忙，請稍後再試，或直接聯繫我們的客服：\n📞 0906367231\n📧 evaboxbox@gmail.com',
         productIds: [],
-        source: "error",
+        source: 'error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

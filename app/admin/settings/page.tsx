@@ -1,8 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Image from "next/image";
-import { getToken, useToast } from "@/lib/admin-utils";
+import { useCallback, useEffect, useState } from 'react';
+
+import Image from 'next/image';
+
+import { getToken, useToast } from '@/lib/admin-utils';
 
 interface ConfigItem {
   key: string;
@@ -11,8 +13,8 @@ interface ConfigItem {
   description: string;
 }
 
-const AUTO_SYNC_KEY = "auto_sync_enabled";
-const AUTO_RESPOND_IDS_KEY = "auto_respond_user_ids";
+const AUTO_SYNC_KEY = 'auto_sync_enabled';
+const AUTO_RESPOND_IDS_KEY = 'auto_respond_user_ids';
 
 const CONFIG_MAX_LENGTHS: Record<string, number> = {
   greeting: 500,
@@ -47,86 +49,86 @@ function hasSuspiciousContent(value: string): boolean {
   });
 }
 
-const CONFIG_SECTIONS: Omit<ConfigItem, "value">[] = [
+const CONFIG_SECTIONS: Omit<ConfigItem, 'value'>[] = [
   {
-    key: "next_order_announcement",
-    label: "下次開單時間公告",
-    description: "顧客問「下次開單」時的回覆內容",
+    key: 'next_order_announcement',
+    label: '下次開單時間公告',
+    description: '顧客問「下次開單」時的回覆內容',
   },
   {
-    key: "greeting",
-    label: "打招呼訊息",
-    description: "顧客呼叫小螞蟻時的歡迎訊息（純文字）",
+    key: 'greeting',
+    label: '打招呼訊息',
+    description: '顧客呼叫小螞蟻時的歡迎訊息（純文字）',
   },
   {
-    key: "mission",
-    label: "任務目標",
-    description: "客服助理的核心任務",
+    key: 'mission',
+    label: '任務目標',
+    description: '客服助理的核心任務',
   },
   {
-    key: "rules",
-    label: "回覆規則",
-    description: "優先順序、禁止事項、未知問題處理",
+    key: 'rules',
+    label: '回覆規則',
+    description: '優先順序、禁止事項、未知問題處理',
   },
   {
-    key: "format",
-    label: "回覆格式",
-    description: "語氣、長度、emoji 使用、排版規則",
+    key: 'format',
+    label: '回覆格式',
+    description: '語氣、長度、emoji 使用、排版規則',
   },
   {
-    key: "out_of_scope_reply",
-    label: "超出範圍回覆",
-    description: "不相關問題的回覆模板",
+    key: 'out_of_scope_reply',
+    label: '超出範圍回覆',
+    description: '不相關問題的回覆模板',
   },
   {
-    key: "shipping",
-    label: "運費與出貨",
-    description: "運費金額、出貨時間、包裝說明",
+    key: 'shipping',
+    label: '運費與出貨',
+    description: '運費金額、出貨時間、包裝說明',
   },
   {
-    key: "pickup",
-    label: "取貨方式",
-    description: "工作室自取的地點與規則",
+    key: 'pickup',
+    label: '取貨方式',
+    description: '工作室自取的地點與規則',
   },
   {
-    key: "payment",
-    label: "付款方式",
-    description: "接受的付款方式",
+    key: 'payment',
+    label: '付款方式',
+    description: '接受的付款方式',
   },
   {
-    key: "refund_policy",
-    label: "退換貨政策",
-    description: "退款條件與流程",
+    key: 'refund_policy',
+    label: '退換貨政策',
+    description: '退款條件與流程',
   },
   {
-    key: "membership",
-    label: "會員制度",
-    description: "會員等級、升級條件、優惠",
+    key: 'membership',
+    label: '會員制度',
+    description: '會員等級、升級條件、優惠',
   },
   {
-    key: "brand_story",
-    label: "品牌故事",
-    description: "關於螞蟻窩甜點",
+    key: 'brand_story',
+    label: '品牌故事',
+    description: '關於螞蟻窩甜點',
   },
   {
-    key: "contact",
-    label: "聯絡資訊",
-    description: "店名、地址、電話、社群連結",
+    key: 'contact',
+    label: '聯絡資訊',
+    description: '店名、地址、電話、社群連結',
   },
   {
-    key: "ordering_process",
-    label: "訂購流程",
-    description: "從瀏覽到下單的步驟",
+    key: 'ordering_process',
+    label: '訂購流程',
+    description: '從瀏覽到下單的步驟',
   },
   {
-    key: "reminders",
-    label: "注意事項",
-    description: "AI 回覆時的額外提醒",
+    key: 'reminders',
+    label: '注意事項',
+    description: 'AI 回覆時的額外提醒',
   },
   {
-    key: "price_reference",
-    label: "價格對照表",
-    description: "所有商品價格由低到高排序",
+    key: 'price_reference',
+    label: '價格對照表',
+    description: '所有商品價格由低到高排序',
   },
 ];
 
@@ -140,24 +142,19 @@ export default function SettingsPage() {
   const [configs, setConfigs] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [allUsers, setAllUsers] = useState<LineUserInfo[]>([]);
   const [showAddAdmin, setShowAddAdmin] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    fetchConfigs();
-    fetchUsers();
-  }, []);
-
-  async function fetchConfigs() {
+  const fetchConfigs = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/config", {
+      const res = await fetch('/api/admin/config', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) {
-        const data: { key: string; value: string }[] = await res.json();
+        const data = (await res.json()) as { key: string; value: string }[];
         const map = new Map<string, string>();
         for (const item of data) {
           map.set(item.key, item.value);
@@ -165,46 +162,59 @@ export default function SettingsPage() {
         setConfigs(map);
       }
     } catch {
-      toast("無法載入設定，請重新整理頁面", "error");
+      toast('無法載入設定，請重新整理頁面', 'error');
     }
     setLoading(false);
-  }
+  }, [toast]);
 
-  async function fetchUsers() {
+  const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await fetch('/api/admin/users', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setAllUsers(await res.json());
+      if (res.ok) setAllUsers(await res.json() as LineUserInfo[]);
     } catch {
-      toast("無法載入用戶清單", "error");
+      toast('無法載入用戶清單', 'error');
     }
-  }
+  }, [toast]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchConfigs();
+    void fetchUsers();
+  }, [fetchConfigs, fetchUsers]);
 
   function getAdminIds(): string[] {
-    return (configs.get(AUTO_RESPOND_IDS_KEY) || "").split(/[\n,]/).map((id) => id.trim()).filter(Boolean);
+    return (configs.get(AUTO_RESPOND_IDS_KEY) || '')
+      .split(/[\n,]/)
+      .map((id) => id.trim())
+      .filter(Boolean);
   }
 
   async function saveAdminIds(ids: string[]) {
     try {
-      const value = ids.join("\n");
-      const res = await fetch("/api/admin/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+      const value = ids.join('\n');
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ key: AUTO_RESPOND_IDS_KEY, value }),
       });
       if (res.ok) {
-        setConfigs((prev) => { const m = new Map(prev); m.set(AUTO_RESPOND_IDS_KEY, value); return m; });
-        toast("管理員名單已更新！");
+        setConfigs((prev) => {
+          const m = new Map(prev);
+          m.set(AUTO_RESPOND_IDS_KEY, value);
+          return m;
+        });
+        toast('管理員名單已更新！');
       }
     } catch {
-      toast("更新管理員名單失敗", "error");
+      toast('更新管理員名單失敗', 'error');
     }
   }
 
   function startEdit(key: string) {
     setEditingKey(key);
-    setEditValue(configs.get(key) || "");
+    setEditValue(configs.get(key) || '');
   }
 
   async function handleSave() {
@@ -212,33 +222,33 @@ export default function SettingsPage() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/admin/config", {
-        method: "POST",
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
         body: JSON.stringify({ key: editingKey, value: editValue }),
       });
 
-      const result = await res.json();
+      const result = (await res.json()) as { warnings?: string[]; error?: string };
       if (res.ok) {
         setConfigs((prev) => {
           const next = new Map(prev);
-          next.set(editingKey!, editValue);
+          next.set(editingKey, editValue);
           return next;
         });
-        if (result.warnings?.length > 0) {
-          toast("儲存成功！⚠️ " + result.warnings.join(", "));
+        if (result.warnings && result.warnings.length > 0) {
+          toast('儲存成功！⚠️ ' + result.warnings.join(', '));
         } else {
-          toast("儲存成功！即時生效中");
+          toast('儲存成功！即時生效中');
         }
         setEditingKey(null);
       } else {
-        toast(result.error || "儲存失敗", "error");
+        toast(result.error || '儲存失敗', 'error');
       }
     } catch {
-      toast("網路錯誤", "error");
+      toast('網路錯誤', 'error');
     }
     setSaving(false);
   }
@@ -268,30 +278,39 @@ export default function SettingsPage() {
             </p>
           </div>
           <select
-            value={configs.get("ai_model") || "gemini-2.5-flash-lite"}
-            onChange={async (e) => {
+            value={configs.get('ai_model') || 'gemini-2.5-flash-lite'}
+            onChange={(e) => void (async () => {
               const value = e.target.value;
               try {
-                const res = await fetch("/api/admin/config", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-                  body: JSON.stringify({ key: "ai_model", value }),
+                const res = await fetch('/api/admin/config', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                  },
+                  body: JSON.stringify({ key: 'ai_model', value }),
                 });
                 if (res.ok) {
-                  setConfigs((prev) => { const m = new Map(prev); m.set("ai_model", value); return m; });
-                  toast("模型已切換為 " + value);
+                  setConfigs((prev) => {
+                    const m = new Map(prev);
+                    m.set('ai_model', value);
+                    return m;
+                  });
+                  toast('模型已切換為 ' + value);
                 }
               } catch {
-                toast("切換模型失敗", "error");
+                toast('切換模型失敗', 'error');
               }
-            }}
+            })()}
             className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[13px] text-stone-700 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700"
           >
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（推薦，最快）</option>
             <option value="gemini-2.5-flash">Gemini 2.5 Flash（較聰明）</option>
             <option value="gemini-2.5-pro">Gemini 2.5 Pro（最聰明，較慢）</option>
             <option value="gemini-3-flash-preview">Gemini 3 Flash Preview（實驗性）</option>
-            <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite Preview（實驗性，可能很慢）</option>
+            <option value="gemini-3.1-flash-lite-preview">
+              Gemini 3.1 Flash-Lite Preview（實驗性，可能很慢）
+            </option>
           </select>
         </div>
       </div>
@@ -309,14 +328,14 @@ export default function SettingsPage() {
             </p>
           </div>
           <button
-            onClick={async () => {
+            onClick={() => void (async () => {
               try {
                 const current = configs.get(AUTO_SYNC_KEY);
-                const next = current === "false" ? "true" : "false";
-                const res = await fetch("/api/admin/config", {
-                  method: "POST",
+                const next = current === 'false' ? 'true' : 'false';
+                const res = await fetch('/api/admin/config', {
+                  method: 'POST',
                   headers: {
-                    "Content-Type": "application/json",
+                    'Content-Type': 'application/json',
                     Authorization: `Bearer ${getToken()}`,
                   },
                   body: JSON.stringify({ key: AUTO_SYNC_KEY, value: next }),
@@ -329,22 +348,18 @@ export default function SettingsPage() {
                   });
                 }
               } catch {
-                toast("切換自動同步失敗", "error");
+                toast('切換自動同步失敗', 'error');
               }
-            }}
+            })()}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-              configs.get(AUTO_SYNC_KEY) !== "false"
-                ? "bg-amber-700"
-                : "bg-stone-200"
+              configs.get(AUTO_SYNC_KEY) !== 'false' ? 'bg-amber-700' : 'bg-stone-200'
             }`}
             role="switch"
-            aria-checked={configs.get(AUTO_SYNC_KEY) !== "false"}
+            aria-checked={configs.get(AUTO_SYNC_KEY) !== 'false'}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                configs.get(AUTO_SYNC_KEY) !== "false"
-                  ? "translate-x-6"
-                  : "translate-x-1"
+                configs.get(AUTO_SYNC_KEY) !== 'false' ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
           </button>
@@ -375,18 +390,31 @@ export default function SettingsPage() {
               getAdminIds().map((id) => {
                 const user = allUsers.find((u) => u.lineUserId === id);
                 return (
-                  <div key={id} className="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5">
+                  <div
+                    key={id}
+                    className="flex items-center gap-3 bg-stone-50 rounded-xl px-3 py-2.5"
+                  >
                     {user?.pictureUrl ? (
-                      <Image src={user.pictureUrl} alt={user.displayName + " 的大頭貼"} width={32} height={32} className="w-8 h-8 rounded-full shrink-0" />
+                      <Image
+                        src={user.pictureUrl}
+                        alt={user.displayName + ' 的大頭貼'}
+                        width={32}
+                        height={32}
+                        className="w-8 h-8 rounded-full shrink-0"
+                      />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-[11px] text-stone-400 shrink-0">👤</div>
+                      <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-[11px] text-stone-400 shrink-0">
+                        👤
+                      </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-stone-800 truncate">{user?.displayName || "未知用戶"}</p>
+                      <p className="text-[13px] font-medium text-stone-800 truncate">
+                        {user?.displayName || '未知用戶'}
+                      </p>
                       <p className="text-[10px] text-stone-400 font-mono truncate">{id}</p>
                     </div>
                     <button
-                      onClick={() => saveAdminIds(getAdminIds().filter((x) => x !== id))}
+                      onClick={() => void saveAdminIds(getAdminIds().filter((x) => x !== id))}
                       className="text-[11px] text-red-400 hover:text-red-600 shrink-0"
                     >
                       移除
@@ -404,23 +432,35 @@ export default function SettingsPage() {
               {/* Known users not yet admin */}
               {allUsers.filter((u) => !getAdminIds().includes(u.lineUserId)).length > 0 && (
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {allUsers.filter((u) => !getAdminIds().includes(u.lineUserId)).map((user) => (
-                    <button
-                      key={user.lineUserId}
-                      onClick={() => {
-                        saveAdminIds([...getAdminIds(), user.lineUserId]);
-                        setShowAddAdmin(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white transition-colors text-left"
-                    >
-                      {user.pictureUrl ? (
-                        <Image src={user.pictureUrl} alt={user.displayName + " 的大頭貼"} width={28} height={28} className="w-7 h-7 rounded-full shrink-0" />
-                      ) : (
-                        <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] text-stone-400 shrink-0">👤</div>
-                      )}
-                      <span className="text-[11px] text-stone-700 truncate">{user.displayName}</span>
-                    </button>
-                  ))}
+                  {allUsers
+                    .filter((u) => !getAdminIds().includes(u.lineUserId))
+                    .map((user) => (
+                      <button
+                        key={user.lineUserId}
+                        onClick={() => {
+                          void saveAdminIds([...getAdminIds(), user.lineUserId]);
+                          setShowAddAdmin(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-white transition-colors text-left"
+                      >
+                        {user.pictureUrl ? (
+                          <Image
+                            src={user.pictureUrl}
+                            alt={user.displayName + ' 的大頭貼'}
+                            width={28}
+                            height={28}
+                            className="w-7 h-7 rounded-full shrink-0"
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-[10px] text-stone-400 shrink-0">
+                            👤
+                          </div>
+                        )}
+                        <span className="text-[11px] text-stone-700 truncate">
+                          {user.displayName}
+                        </span>
+                      </button>
+                    ))}
                 </div>
               )}
               {/* Manual ID input */}
@@ -433,10 +473,10 @@ export default function SettingsPage() {
                 />
                 <button
                   onClick={() => {
-                    const input = document.getElementById("manual-admin-id") as HTMLInputElement;
+                    const input = document.getElementById('manual-admin-id') as HTMLInputElement;
                     const val = input?.value?.trim();
                     if (val && !getAdminIds().includes(val)) {
-                      saveAdminIds([...getAdminIds(), val]);
+                      void saveAdminIds([...getAdminIds(), val]);
                       setShowAddAdmin(false);
                     }
                   }}
@@ -464,7 +504,7 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden divide-y divide-stone-100">
           {CONFIG_SECTIONS.map((section) => {
             const value = configs.get(section.key);
-            const hasValue = value !== undefined && value !== "";
+            const hasValue = value !== undefined && value !== '';
             return (
               <button
                 key={section.key}
@@ -472,9 +512,7 @@ export default function SettingsPage() {
                 className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-stone-50 transition-colors text-left group"
               >
                 <div className="flex-1 min-w-0 pr-3">
-                  <p className="text-[13px] font-medium text-stone-800">
-                    {section.label}
-                  </p>
+                  <p className="text-[13px] font-medium text-stone-800">{section.label}</p>
                   <p className="text-[11px] text-stone-400 mt-0.5 truncate">
                     {section.description}
                   </p>
@@ -482,12 +520,10 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full ${
-                      hasValue
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-stone-100 text-stone-400"
+                      hasValue ? 'bg-amber-50 text-amber-700' : 'bg-stone-100 text-stone-400'
                     }`}
                   >
-                    {hasValue ? "已設定" : "未設定"}
+                    {hasValue ? '已設定' : '未設定'}
                   </span>
                   <svg
                     viewBox="0 0 20 20"
@@ -513,8 +549,7 @@ export default function SettingsPage() {
           <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[85vh] flex flex-col">
             <div className="px-4 py-4 border-b border-stone-100 flex items-center justify-between">
               <h3 className="text-[13px] font-semibold text-stone-800">
-                {CONFIG_SECTIONS.find((s) => s.key === editingKey)?.label ||
-                  editingKey}
+                {CONFIG_SECTIONS.find((s) => s.key === editingKey)?.label || editingKey}
               </h3>
               <button
                 onClick={() => setEditingKey(null)}
@@ -533,20 +568,18 @@ export default function SettingsPage() {
               <textarea
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
-                maxLength={CONFIG_MAX_LENGTHS[editingKey!] || DEFAULT_MAX_LENGTH}
+                maxLength={CONFIG_MAX_LENGTHS[editingKey] || DEFAULT_MAX_LENGTH}
                 rows={15}
                 className="w-full px-3 py-2.5 border border-stone-200 rounded-xl text-stone-900 text-[13px] font-mono bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700 transition-colors resize-none"
               />
               <div className="flex justify-between mt-1.5 px-1">
                 {hasSuspiciousContent(editValue) ? (
-                  <p className="text-[11px] text-orange-500">
-                    ⚠️ 內容可能包含注入語句，請確認
-                  </p>
+                  <p className="text-[11px] text-orange-500">⚠️ 內容可能包含注入語句，請確認</p>
                 ) : (
                   <span />
                 )}
                 <p className="text-[11px] text-stone-400">
-                  {editValue.length} / {CONFIG_MAX_LENGTHS[editingKey!] || DEFAULT_MAX_LENGTH}
+                  {editValue.length} / {CONFIG_MAX_LENGTHS[editingKey] || DEFAULT_MAX_LENGTH}
                 </p>
               </div>
             </div>
@@ -558,11 +591,11 @@ export default function SettingsPage() {
                 取消
               </button>
               <button
-                onClick={handleSave}
+                onClick={() => void handleSave()}
                 disabled={saving}
                 className="flex-1 py-2.5 bg-amber-800 text-white rounded-xl text-[13px] font-medium hover:bg-amber-900 disabled:opacity-60 transition-colors"
               >
-                {saving ? "儲存中..." : "儲存"}
+                {saving ? '儲存中...' : '儲存'}
               </button>
             </div>
           </div>

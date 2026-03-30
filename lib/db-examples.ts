@@ -1,5 +1,5 @@
-import { getSupabase } from "./supabase";
-import { cache, isCacheValid, CacheEntry } from "./db-cache";
+import { CacheEntry, cache, isCacheValid } from './db-cache';
+import { getSupabase } from './supabase';
 
 // ── Conversation Examples ──────────────────────────────
 
@@ -13,29 +13,42 @@ export interface ConversationExample {
   createdAt: string;
 }
 
+// ── DB Row Type ──────────────────────────────────────────
+
+interface ConversationExampleRow {
+  id: string;
+  customer_message: string;
+  correct_response: string;
+  note: string | null;
+  is_active: boolean;
+  sort_order: number | null;
+  created_at: string;
+}
+
 export async function getActiveExamples(): Promise<ConversationExample[]> {
-  if (isCacheValid(cache.examples)) return cache.examples.data;
+  if (isCacheValid(cache.examples as CacheEntry<ConversationExample[]> | null))
+    return (cache.examples as CacheEntry<ConversationExample[]>).data;
 
   const sb = getSupabase();
   if (sb) {
     try {
       const { data, error } = await sb
-        .from("conversation_examples")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+        .from('conversation_examples')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
 
       if (!error && data) {
-        const examples = data.map(mapDbExample);
+        const examples = (data as ConversationExampleRow[]).map(mapDbExample);
         cache.examples = { data: examples, timestamp: Date.now() };
         return examples;
       }
       // Table might not exist yet — fail silently
-      if (error?.code !== "42P01") {
-        console.error("Supabase examples query error:", error);
+      if (error?.code !== '42P01') {
+        console.error('Supabase examples query error:', error);
       }
     } catch (e) {
-      console.error("Supabase examples fetch error:", e);
+      console.error('Supabase examples fetch error:', e);
     }
   }
   return [];
@@ -46,28 +59,28 @@ export async function getAllExamples(): Promise<ConversationExample[]> {
   if (sb) {
     try {
       const { data, error } = await sb
-        .from("conversation_examples")
-        .select("*")
-        .order("sort_order", { ascending: true });
+        .from('conversation_examples')
+        .select('*')
+        .order('sort_order', { ascending: true });
 
-      if (!error && data) return data.map(mapDbExample);
-      if (error?.code !== "42P01") {
-        console.error("Supabase all examples query error:", error);
+      if (!error && data) return (data as ConversationExampleRow[]).map(mapDbExample);
+      if (error?.code !== '42P01') {
+        console.error('Supabase all examples query error:', error);
       }
     } catch (e) {
-      console.error("Supabase examples fetch error:", e);
+      console.error('Supabase examples fetch error:', e);
     }
   }
   return [];
 }
 
 export async function upsertExample(
-  example: Partial<ConversationExample> & { customerMessage: string; correctResponse: string }
+  example: Partial<ConversationExample> & { customerMessage: string; correctResponse: string },
 ): Promise<ConversationExample | null> {
   const sb = getSupabase();
   if (!sb) return null;
 
-  const row: any = {
+  const row: Record<string, unknown> = {
     customer_message: example.customerMessage,
     correct_response: example.correctResponse,
     note: example.note || null,
@@ -77,33 +90,30 @@ export async function upsertExample(
   };
   if (example.id) row.id = example.id;
 
-  const { data, error } = await sb
-    .from("conversation_examples")
-    .upsert(row, { onConflict: "id" })
+  const result = await sb
+    .from('conversation_examples')
+    .upsert(row, { onConflict: 'id' })
     .select()
     .single();
 
-  if (error) {
-    console.error("Supabase upsert example error:", error);
+  if (result.error) {
+    console.error('Supabase upsert example error:', result.error);
     return null;
   }
 
   cache.examples = null;
   cache.config = null; // system prompt includes examples
-  return mapDbExample(data);
+  return mapDbExample(result.data as ConversationExampleRow);
 }
 
 export async function deleteExample(id: string): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
 
-  const { error } = await sb
-    .from("conversation_examples")
-    .delete()
-    .eq("id", id);
+  const { error } = await sb.from('conversation_examples').delete().eq('id', id);
 
   if (error) {
-    console.error("Supabase delete example error:", error);
+    console.error('Supabase delete example error:', error);
     return false;
   }
 
@@ -112,7 +122,7 @@ export async function deleteExample(id: string): Promise<boolean> {
   return true;
 }
 
-function mapDbExample(row: any): ConversationExample {
+function mapDbExample(row: ConversationExampleRow): ConversationExample {
   return {
     id: row.id,
     customerMessage: row.customer_message,
