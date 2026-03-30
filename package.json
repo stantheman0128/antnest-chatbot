@@ -20,6 +20,7 @@
     "@google/generative-ai": "^0.24.1",
     "@line/bot-sdk": "^10.6.0",
     "@line/liff": "^2.28.0",
+    "@sentry/nextjs": "^10.46.0",
     "@supabase/supabase-js": "^2.98.0",
     "jose": "^6.2.2",
     "next": "^16.1.6",
