@@ -266,29 +266,31 @@ export default function ProductEditPage() {
           {!isNew && (
             <button
               type="button"
-              onClick={() => void (async () => {
-                setSyncing(true);
-                try {
-                  const res = await fetch('/api/admin/scrape', {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${getToken()}`,
-                    },
-                    body: JSON.stringify({ handle: productId }),
-                  });
-                  if (res.ok) {
-                    toast('同步成功！重新載入...');
-                    await fetchProduct();
-                  } else {
-                    const err = (await res.json()) as { error?: string };
-                    toast(`同步失敗：${err.error || '未知錯誤'}`, 'error');
+              onClick={() =>
+                void (async () => {
+                  setSyncing(true);
+                  try {
+                    const res = await fetch('/api/admin/scrape', {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                      },
+                      body: JSON.stringify({ handle: productId }),
+                    });
+                    if (res.ok) {
+                      toast('同步成功！重新載入...');
+                      await fetchProduct();
+                    } else {
+                      const err = (await res.json()) as { error?: string };
+                      toast(`同步失敗：${err.error || '未知錯誤'}`, 'error');
+                    }
+                  } catch {
+                    toast('同步失敗：網路錯誤', 'error');
                   }
-                } catch {
-                  toast('同步失敗：網路錯誤', 'error');
-                }
-                setSyncing(false);
-              })()}
+                  setSyncing(false);
+                })()
+              }
               disabled={syncing}
               className="flex items-center gap-1 text-[11px] text-amber-600 hover:text-amber-800 disabled:opacity-50"
             >

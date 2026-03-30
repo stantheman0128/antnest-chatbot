@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { verifyAdmin } from '@/lib/admin-auth';
-import { type ConversationExample, deleteExample, getAllExamples, upsertExample } from '@/lib/data-service';
+import {
+  type ConversationExample,
+  deleteExample,
+  getAllExamples,
+  upsertExample,
+} from '@/lib/data-service';
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req);

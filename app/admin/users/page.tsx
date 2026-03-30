@@ -62,7 +62,7 @@ export default function UsersPage() {
       const res = await fetch('/api/admin/users', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setCustomers(await res.json() as Customer[]);
+      if (res.ok) setCustomers((await res.json()) as Customer[]);
     } catch {
       toast('無法載入顧客列表', 'error');
     }
@@ -73,7 +73,7 @@ export default function UsersPage() {
       const res = await fetch('/api/admin/users?stats=true', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setStats(await res.json() as Stats | null);
+      if (res.ok) setStats((await res.json()) as Stats | null);
     } catch {
       toast('無法載入統計資料', 'error');
     }
@@ -102,7 +102,7 @@ export default function UsersPage() {
       fetch(`/api/admin/users?id=${user.lineUserId}&limit=100`, { headers }).catch(() => null),
       fetch(`/api/admin/users?id=${user.lineUserId}&summary`, { headers }).catch(() => null),
     ]);
-    if (histRes?.ok) setHistory(await histRes.json() as ConversationLog[]);
+    if (histRes?.ok) setHistory((await histRes.json()) as ConversationLog[]);
     if (sumRes?.ok) {
       const data = (await sumRes.json()) as { summary?: string };
       setSummary(data.summary ?? null);

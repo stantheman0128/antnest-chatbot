@@ -260,11 +260,7 @@ export async function createReservation(input: {
     return null;
   }
   const newId = rpcResult.data as string;
-  const fetchResult = await sb
-    .from('reservations')
-    .select('*')
-    .eq('id', newId)
-    .single();
+  const fetchResult = await sb.from('reservations').select('*').eq('id', newId).single();
   if (fetchResult.error || !fetchResult.data) return null;
   return mapDbReservation(fetchResult.data as ReservationRow);
 }
