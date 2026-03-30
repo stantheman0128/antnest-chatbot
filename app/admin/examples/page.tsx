@@ -36,7 +36,7 @@ export default function ExamplesPage() {
       const res = await fetch('/api/admin/examples', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setExamples(await res.json() as Example[]);
+      if (res.ok) setExamples((await res.json()) as Example[]);
       else toast('載入指令失敗', 'error');
     } catch {
       toast('載入指令失敗', 'error');

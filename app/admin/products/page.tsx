@@ -27,7 +27,7 @@ export default function ProductsPage() {
       const res = await fetch('/api/admin/products?all=true', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setProducts(await res.json() as Product[]);
+      if (res.ok) setProducts((await res.json()) as Product[]);
       else toast('載入產品失敗', 'error');
     } catch {
       toast('載入產品失敗', 'error');
@@ -47,7 +47,11 @@ export default function ProductsPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) {
-        const data = (await res.json()) as { added?: number; updated?: number; deactivated?: number };
+        const data = (await res.json()) as {
+          added?: number;
+          updated?: number;
+          deactivated?: number;
+        };
         toast(`同步完成 · 新增 ${data.added} · 更新 ${data.updated} · 下架 ${data.deactivated}`);
         await fetchProducts();
       } else {

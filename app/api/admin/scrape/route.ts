@@ -214,9 +214,7 @@ function buildDetailedDescription(jsonData: CyberbizProductJson): string | null 
 
   // 2. Parse spec section into sub-fields
   const otherDescs = jsonData?.other_descriptions || [];
-  const specSection = otherDescs.find(
-    (d) => d.setting_name === 'product_description_section_spec',
-  );
+  const specSection = otherDescs.find((d) => d.setting_name === 'product_description_section_spec');
   if (specSection?.body_html) {
     const specText = stripHtml(specSection.body_html);
     const parsed = parseSpecSection(specText);

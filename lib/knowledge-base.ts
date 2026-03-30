@@ -123,10 +123,7 @@ function assemblePrompt(
     wrap('next_order_announcement', get('next_order_announcement')),
     '</knowledge_base>',
     wrap('reminders', get('reminders')),
-    wrap(
-      'corrections',
-      '（目前無動態修正規則。此區塊將由系統自動注入過往的錯誤修正經驗。）',
-    ),
+    wrap('corrections', '（目前無動態修正規則。此區塊將由系統自動注入過往的錯誤修正經驗。）'),
   ];
 
   return sections.filter(Boolean).join('\n\n');

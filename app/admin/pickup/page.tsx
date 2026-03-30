@@ -119,33 +119,36 @@ export default function PickupPage() {
       const res = await fetch('/api/admin/pickup/availability', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setAvailabilities(await res.json() as Availability[]);
+      if (res.ok) setAvailabilities((await res.json()) as Availability[]);
     } catch {
       toast('載入可取貨日期失敗', 'error');
     }
     setLoadingDates(false);
   }, [toast]);
 
-  const fetchReservations = useCallback(async (date?: string) => {
-    const url = date
-      ? `/api/admin/pickup/reservations?date=${date}`
-      : '/api/admin/pickup/reservations';
-    try {
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      if (res.ok) setReservations(await res.json() as Reservation[]);
-    } catch {
-      toast('載入預約紀錄失敗', 'error');
-    }
-  }, [toast]);
+  const fetchReservations = useCallback(
+    async (date?: string) => {
+      const url = date
+        ? `/api/admin/pickup/reservations?date=${date}`
+        : '/api/admin/pickup/reservations';
+      try {
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        if (res.ok) setReservations((await res.json()) as Reservation[]);
+      } catch {
+        toast('載入預約紀錄失敗', 'error');
+      }
+    },
+    [toast],
+  );
 
   const fetchUpcomingReservations = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/pickup/reservations?upcoming=true', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setUpcomingReservations(await res.json() as Reservation[]);
+      if (res.ok) setUpcomingReservations((await res.json()) as Reservation[]);
     } catch {
       toast('載入近期預約失敗', 'error');
     }

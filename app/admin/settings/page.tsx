@@ -172,7 +172,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/admin/users', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (res.ok) setAllUsers(await res.json() as LineUserInfo[]);
+      if (res.ok) setAllUsers((await res.json()) as LineUserInfo[]);
     } catch {
       toast('無法載入用戶清單', 'error');
     }
@@ -279,29 +279,31 @@ export default function SettingsPage() {
           </div>
           <select
             value={configs.get('ai_model') || 'gemini-2.5-flash-lite'}
-            onChange={(e) => void (async () => {
-              const value = e.target.value;
-              try {
-                const res = await fetch('/api/admin/config', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getToken()}`,
-                  },
-                  body: JSON.stringify({ key: 'ai_model', value }),
-                });
-                if (res.ok) {
-                  setConfigs((prev) => {
-                    const m = new Map(prev);
-                    m.set('ai_model', value);
-                    return m;
+            onChange={(e) =>
+              void (async () => {
+                const value = e.target.value;
+                try {
+                  const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({ key: 'ai_model', value }),
                   });
-                  toast('模型已切換為 ' + value);
+                  if (res.ok) {
+                    setConfigs((prev) => {
+                      const m = new Map(prev);
+                      m.set('ai_model', value);
+                      return m;
+                    });
+                    toast('模型已切換為 ' + value);
+                  }
+                } catch {
+                  toast('切換模型失敗', 'error');
                 }
-              } catch {
-                toast('切換模型失敗', 'error');
-              }
-            })()}
+              })()
+            }
             className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[13px] text-stone-700 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700"
           >
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（推薦，最快）</option>
@@ -328,29 +330,31 @@ export default function SettingsPage() {
             </p>
           </div>
           <button
-            onClick={() => void (async () => {
-              try {
-                const current = configs.get(AUTO_SYNC_KEY);
-                const next = current === 'false' ? 'true' : 'false';
-                const res = await fetch('/api/admin/config', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getToken()}`,
-                  },
-                  body: JSON.stringify({ key: AUTO_SYNC_KEY, value: next }),
-                });
-                if (res.ok) {
-                  setConfigs((prev) => {
-                    const m = new Map(prev);
-                    m.set(AUTO_SYNC_KEY, next);
-                    return m;
+            onClick={() =>
+              void (async () => {
+                try {
+                  const current = configs.get(AUTO_SYNC_KEY);
+                  const next = current === 'false' ? 'true' : 'false';
+                  const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({ key: AUTO_SYNC_KEY, value: next }),
                   });
+                  if (res.ok) {
+                    setConfigs((prev) => {
+                      const m = new Map(prev);
+                      m.set(AUTO_SYNC_KEY, next);
+                      return m;
+                    });
+                  }
+                } catch {
+                  toast('切換自動同步失敗', 'error');
                 }
-              } catch {
-                toast('切換自動同步失敗', 'error');
-              }
-            })()}
+              })()
+            }
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
               configs.get(AUTO_SYNC_KEY) !== 'false' ? 'bg-amber-700' : 'bg-stone-200'
             }`}

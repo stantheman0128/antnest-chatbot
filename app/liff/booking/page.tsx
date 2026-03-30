@@ -114,7 +114,7 @@ export default function LiffBookingPage() {
     setLoadingRes(true);
     try {
       const res = await fetch(`/api/liff/reservations?lineUserId=${liffState.profile.userId}`);
-      if (res.ok) setReservations(await res.json() as Reservation[]);
+      if (res.ok) setReservations((await res.json()) as Reservation[]);
     } catch {
       /* ignore */
     }

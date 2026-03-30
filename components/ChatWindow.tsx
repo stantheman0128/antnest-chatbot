@@ -53,7 +53,10 @@ export default function ChatWindow() {
         body: JSON.stringify({ message: text, history }),
       });
 
-      const data = (await res.json()) as { response?: string; source?: 'template' | 'ai' | 'error' };
+      const data = (await res.json()) as {
+        response?: string;
+        source?: 'template' | 'ai' | 'error';
+      };
 
       const botMessage: Message = {
         role: 'bot',
