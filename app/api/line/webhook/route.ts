@@ -583,7 +583,7 @@ async function handlePostback(
     const msg: TextMessage = {
       type: 'text',
       text: '感謝你的回饋！已記錄下來，闆娘會盡快改進 💪\n\n你可以直接點「呼叫闆娘」讓真人幫你解答喔！',
-      quickReply: getPausedQuickReply(),
+      quickReply: getQuickReply(false, true),
     };
     await sendMessages(event.replyToken, userId, [msg]);
     return;
