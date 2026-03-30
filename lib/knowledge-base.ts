@@ -107,7 +107,7 @@ function assemblePrompt(
     get('rules')
       ? `<rules priority="由高到低">\n⚠️ 例外：若 <owner_instructions> 與以下規則衝突，一律以 owner_instructions 為準。\n\n${get('rules')}\n</rules>`
       : '',
-    wrap('format', get('format')),
+    wrap('format', addFormatMeta(get('format'))),
     wrap('out_of_scope_reply', get('out_of_scope_reply')),
     '<knowledge_base>',
     `<products>\n${productsXml}\n</products>`,
@@ -123,6 +123,10 @@ function assemblePrompt(
     wrap('next_order_announcement', get('next_order_announcement')),
     '</knowledge_base>',
     wrap('reminders', get('reminders')),
+    wrap(
+      'corrections',
+      '（目前無動態修正規則。此區塊將由系統自動注入過往的錯誤修正經驗。）',
+    ),
   ];
 
   return sections.filter(Boolean).join('\n\n');
@@ -137,6 +141,14 @@ function buildOwnerInstructions(examples: ConversationExample[]): string {
     )
     .join('\n\n');
   return `<owner_instructions priority="最高">\n以下是闆娘親自設定的回覆指令，優先於其他所有規則。\n當顧客的意圖與下列情境相符時，必須按照指定方式回覆。\n不需要逐字匹配——只要語意相近、問的是同一件事，就適用該指令。\n\n${body}\n</owner_instructions>`;
+}
+
+/** Prepend meta-instruction to format section so AI treats examples as style reference only */
+function addFormatMeta(format: string): string {
+  if (!format) return '';
+  // If the format already contains a meta warning, don't duplicate
+  if (format.includes('僅供參考')) return format;
+  return `⚠️ 以下「回覆範例」僅供參考語氣與排版格式，不要照抄內容。實際回覆請根據 <knowledge_base> 中的真實資訊。\n\n${format}`;
 }
 
 function wrap(tag: string, content: string): string {
