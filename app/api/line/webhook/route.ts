@@ -83,7 +83,7 @@ function getLineClient() {
   });
 }
 
-async function sendMessages(replyToken: string, userId: string | undefined, messages: Message[]) {
+async function sendMessages(replyToken: string, _userId: string | undefined, messages: Message[]) {
   await getLineClient().replyMessage(replyToken, messages);
 }
 
@@ -471,7 +471,8 @@ async function handleTextMessage(
     const fallbackText =
       '不好意思，小螞蟻現在腦袋轉不過來 😵‍💫\n請稍後再試一次，或直接點下方「呼叫闆娘」找真人幫你喔！';
     const msg: TextMessage = { type: 'text', text: fallbackText, quickReply: getQuickReply(false) };
-    if (userId) void logConversation(userId, 'bot', fallbackText, { error: true, reason: errMessage });
+    if (userId)
+      void logConversation(userId, 'bot', fallbackText, { error: true, reason: errMessage });
     try {
       await sendMessages(event.replyToken, userId, [msg]);
     } catch {
