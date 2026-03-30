@@ -1,14 +1,15 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
-  --color-primary: #8B5E3C;
-  --color-primary-light: #D4A574;
-  --color-bg: #FFF8F0;
-  --color-bot-bubble: #FFF0E0;
-  --color-user-bubble: #8B5E3C;
+  --color-primary: #8b5e3c;
+  --color-primary-light: #d4a574;
+  --color-bg: #fff8f0;
+  --color-bot-bubble: #fff0e0;
+  --color-user-bubble: #8b5e3c;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   margin: 0;
   background-color: var(--color-bg);
@@ -25,6 +26,12 @@ html, body {
 
 /* Toast animation */
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

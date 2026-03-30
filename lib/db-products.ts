@@ -1,5 +1,5 @@
-import { getSupabase } from "./supabase";
-import { cache, isCacheValid, CacheEntry } from "./db-cache";
+import { CacheEntry, cache, isCacheValid } from './db-cache';
+import { getSupabase } from './supabase';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -29,28 +29,60 @@ export interface ProductCard {
   variants: ProductVariant[];
 }
 
+// ── DB Row Type ──────────────────────────────────────────
+
+interface ProductRow {
+  id: string;
+  name: string;
+  price: string;
+  original_price: string | null;
+  description: string;
+  detailed_description: string | null;
+  image_url: string;
+  store_url: string;
+  badges: string[] | null;
+  is_active: boolean;
+  sort_order: number | null;
+  temperature_zone: string | null;
+  alcohol_free: boolean | null;
+  variants: ProductVariant[] | null;
+}
+
+// ── Static Product Shape ─────────────────────────────────
+
+interface StaticProduct {
+  name: string;
+  price: string;
+  originalPrice?: string | null;
+  description: string;
+  image: string;
+  url: string;
+  badges?: string[];
+}
+
 // ── Products ───────────────────────────────────────────
 
 export async function getActiveProducts(): Promise<ProductCard[]> {
-  if (isCacheValid(cache.products)) return cache.products.data;
+  if (isCacheValid(cache.products as CacheEntry<ProductCard[]> | null))
+    return (cache.products as CacheEntry<ProductCard[]>).data;
 
   const sb = getSupabase();
   if (sb) {
     try {
       const { data, error } = await sb
-        .from("products")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+        .from('products')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
 
       if (!error && data) {
-        const products = data.map(mapDbProduct);
+        const products = (data as ProductRow[]).map(mapDbProduct);
         cache.products = { data: products, timestamp: Date.now() };
         return products;
       }
-      console.error("Supabase products query error:", error);
+      console.error('Supabase products query error:', error);
     } catch (e) {
-      console.error("Supabase products fetch error:", e);
+      console.error('Supabase products fetch error:', e);
     }
   }
 
@@ -63,47 +95,41 @@ export async function getAllProducts(): Promise<ProductCard[]> {
   if (sb) {
     try {
       const { data, error } = await sb
-        .from("products")
-        .select("*")
-        .order("sort_order", { ascending: true });
+        .from('products')
+        .select('*')
+        .order('sort_order', { ascending: true });
 
-      if (!error && data) return data.map(mapDbProduct);
-      console.error("Supabase all products query error:", error);
+      if (!error && data) return (data as ProductRow[]).map(mapDbProduct);
+      console.error('Supabase all products query error:', error);
     } catch (e) {
-      console.error("Supabase all products fetch error:", e);
+      console.error('Supabase all products fetch error:', e);
     }
   }
   return getStaticProducts();
 }
 
-export async function getProductById(
-  id: string
-): Promise<ProductCard | null> {
+export async function getProductById(id: string): Promise<ProductCard | null> {
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb
-        .from("products")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const result = await sb.from('products').select('*').eq('id', id).single();
 
-      if (!error && data) return mapDbProduct(data);
+      if (!result.error && result.data) return mapDbProduct(result.data as ProductRow);
     } catch (e) {
-      console.error("Supabase product fetch error:", e);
+      console.error('Supabase product fetch error:', e);
     }
   }
-  const products = await getStaticProducts();
+  const products = getStaticProducts();
   return products.find((p) => p.id === id) || null;
 }
 
 export async function upsertProduct(
-  product: Partial<ProductCard> & { id: string }
+  product: Partial<ProductCard> & { id: string },
 ): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
 
-  const { error } = await sb.from("products").upsert(
+  const { error } = await sb.from('products').upsert(
     {
       id: product.id,
       name: product.name,
@@ -121,11 +147,11 @@ export async function upsertProduct(
       variants: product.variants ?? [],
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "id" }
+    { onConflict: 'id' },
   );
 
   if (error) {
-    console.error("Supabase upsert product error:", error);
+    console.error('Supabase upsert product error:', error);
     return false;
   }
 
@@ -139,9 +165,9 @@ export async function deleteProduct(id: string): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
 
-  const { error } = await sb.from("products").delete().eq("id", id);
+  const { error } = await sb.from('products').delete().eq('id', id);
   if (error) {
-    console.error("Supabase delete product error:", error);
+    console.error('Supabase delete product error:', error);
     return false;
   }
   cache.products = null;
@@ -153,11 +179,13 @@ export async function deleteProduct(id: string): Promise<boolean> {
 
 function getStaticProducts(): ProductCard[] {
   try {
-    const fs = require("fs");
-    const path = require("path");
-    const filePath = path.join(process.cwd(), "data", "product-cards.json");
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-    return Object.entries(raw).map(([id, p]: [string, any], i) => ({
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const filePath = path.join(process.cwd(), 'data', 'product-cards.json');
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Record<string, StaticProduct>;
+    return Object.entries(raw).map(([id, p], i) => ({
       id,
       name: p.name,
       price: p.price,
@@ -170,7 +198,7 @@ function getStaticProducts(): ProductCard[] {
       isActive: true,
       sortOrder: i,
       temperatureZone: null,
-      alcoholFree: !p.badges?.some((b: string) => b.includes("酒精")),
+      alcoholFree: !(p.badges ?? []).some((b: string) => b.includes('酒精')),
       variants: [],
     }));
   } catch {
@@ -180,7 +208,7 @@ function getStaticProducts(): ProductCard[] {
 
 // ── DB → App Type Mapping ──────────────────────────────
 
-function mapDbProduct(row: any): ProductCard {
+function mapDbProduct(row: ProductRow): ProductCard {
   return {
     id: row.id,
     name: row.name,

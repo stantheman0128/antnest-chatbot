@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import type Liff from "@line/liff";
+import type Liff from '@line/liff';
 
 export interface LiffProfile {
   userId: string;
@@ -9,9 +9,9 @@ export interface LiffProfile {
 }
 
 export type LiffState =
-  | { status: "loading" }
-  | { status: "ready"; profile: LiffProfile; isInClient: boolean }
-  | { status: "error"; error: string };
+  | { status: 'loading' }
+  | { status: 'ready'; profile: LiffProfile; isInClient: boolean }
+  | { status: 'error'; error: string };
 
 let liffInstance: typeof Liff | null = null;
 let initPromise: Promise<typeof Liff> | null = null;
@@ -25,10 +25,10 @@ export async function initLiff(): Promise<typeof Liff> {
   if (initPromise) return initPromise;
 
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-  if (!liffId) throw new Error("NEXT_PUBLIC_LIFF_ID is not configured");
+  if (!liffId) throw new Error('NEXT_PUBLIC_LIFF_ID is not configured');
 
   initPromise = (async () => {
-    const liff = (await import("@line/liff")).default;
+    const liff = (await import('@line/liff')).default;
     await liff.init({ liffId });
 
     // External browser: not logged in → redirect to LINE Login

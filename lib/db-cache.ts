@@ -12,8 +12,8 @@ export function isCacheValid<T>(cache: CacheEntry<T> | null): cache is CacheEntr
 }
 
 // Centralized cache store — each module reads/writes its own key
-// Using `any` intentionally to avoid circular type imports
-export const cache: Record<string, CacheEntry<any> | null> = {
+// Using `unknown` to avoid circular type imports; each consumer casts as needed
+export const cache: Record<string, CacheEntry<unknown> | null> = {
   products: null,
   config: null,
   examples: null,

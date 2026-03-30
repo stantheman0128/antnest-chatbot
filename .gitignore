@@ -33,8 +33,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# IDE
-.vscode/
+# IDE (keep shared settings, ignore personal)
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo
@@ -43,6 +44,10 @@ next-env.d.ts
 # Scripts
 *.py
 product_image_urls.json
+scripts/*.html
+
+# Claude Code
+.claude/
 
 # Reference (local only)
 reference/

@@ -180,13 +180,14 @@ D. 親切口吻 — 自然友善，不過度賣萌
 
 <price_reference>
 甜點價格由低到高排序（回答價格比較問題時請參考此表，務必正確）：
+
 1. 可麗露 NT$70（最便宜的甜點）
 2. 法國 Le Gall 重乳酪蛋糕 NT$99（小）/ NT$230（大四吋）
 3. 雪Q餅 NT$150~NT$170
 4. 北海道 LUXE 巴斯克 NT$370（四吋）/ NT$590（六吋）
 5. 豪華乳酪雙重奏 NT$539（原價 NT$600，限時組合）
-加購品：鏟子湯匙 NT$10
-</price_reference>
+   加購品：鏟子湯匙 NT$10
+   </price_reference>
 
 <shipping>
 運費：
@@ -293,13 +294,14 @@ D. 親切口吻 — 自然友善，不過度賣萌
 </contact>
 
 <ordering_process>
+
 1. 到官網瀏覽商品 → https://antnest.cyberbiz.co
 2. 選擇喜歡的甜點，加入購物車
 3. 選擇取貨方式（超商取貨/工作室自取）
 4. 選擇付款方式並完成結帳
 5. 等待出貨通知（7 個工作天內）
-訂單於完成付款後始成立。
-</ordering_process>
+   訂單於完成付款後始成立。
+   </ordering_process>
 
 </knowledge_base>
 

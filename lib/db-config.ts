@@ -1,5 +1,5 @@
-import { getSupabase } from "./supabase";
-import { cache, isCacheValid, CacheEntry } from "./db-cache";
+import { CacheEntry, cache, isCacheValid } from './db-cache';
+import { getSupabase } from './supabase';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -8,26 +8,36 @@ export interface SystemConfig {
   value: string;
 }
 
+// ── DB Row Type ──────────────────────────────────────────
+
+interface SystemConfigRow {
+  key: string;
+  value: string;
+  updated_at?: string;
+}
+
 // ── System Config ──────────────────────────────────────
 
 export async function getConfigMap(): Promise<Map<string, string>> {
-  if (isCacheValid(cache.config)) return cache.config.data;
+  if (isCacheValid(cache.config as CacheEntry<Map<string, string>> | null))
+    return (cache.config as CacheEntry<Map<string, string>>).data;
 
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb.from("system_config").select("*");
+      const { data, error } = await sb.from('system_config').select('*');
       if (!error && data) {
+        const rows = data as SystemConfigRow[];
         const map = new Map<string, string>();
-        for (const row of data) {
+        for (const row of rows) {
           map.set(row.key, row.value);
         }
         cache.config = { data: map, timestamp: Date.now() };
         return map;
       }
-      console.error("Supabase config query error:", error);
+      console.error('Supabase config query error:', error);
     } catch (e) {
-      console.error("Supabase config fetch error:", e);
+      console.error('Supabase config fetch error:', e);
     }
   }
 
@@ -44,13 +54,12 @@ export async function setConfig(key: string, value: string): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
 
-  const { error } = await sb.from("system_config").upsert(
-    { key, value, updated_at: new Date().toISOString() },
-    { onConflict: "key" }
-  );
+  const { error } = await sb
+    .from('system_config')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
 
   if (error) {
-    console.error("Supabase set config error:", error);
+    console.error('Supabase set config error:', error);
     return false;
   }
   cache.config = null;
@@ -60,8 +69,11 @@ export async function setConfig(key: string, value: string): Promise<boolean> {
 export async function deleteConfig(key: string): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
-  const { error } = await sb.from("system_config").delete().eq("key", key);
-  if (error) { console.error("Supabase delete config error:", error); return false; }
+  const { error } = await sb.from('system_config').delete().eq('key', key);
+  if (error) {
+    console.error('Supabase delete config error:', error);
+    return false;
+  }
   cache.config = null;
   return true;
 }
@@ -70,16 +82,16 @@ export async function getAllConfigs(): Promise<SystemConfig[]> {
   const sb = getSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb
-        .from("system_config")
-        .select("*")
-        .order("key");
-      if (!error && data) return data.map((r) => ({ key: r.key, value: r.value }));
+      const { data, error } = await sb.from('system_config').select('*').order('key');
+      if (!error && data) {
+        const rows = data as SystemConfigRow[];
+        return rows.map((r) => ({ key: r.key, value: r.value }));
+      }
     } catch (e) {
-      console.error("Supabase configs fetch error:", e);
+      console.error('Supabase configs fetch error:', e);
     }
   }
-  const map = await getStaticConfig();
+  const map = getStaticConfig();
   return Array.from(map.entries()).map(([key, value]) => ({ key, value }));
 }
 
@@ -88,23 +100,36 @@ export async function getAllConfigs(): Promise<SystemConfig[]> {
 function getStaticConfig(): Map<string, string> {
   const map = new Map<string, string>();
   try {
-    const fs = require("fs");
-    const path = require("path");
-    const filePath = path.join(process.cwd(), "data", "system-prompt.md");
-    const content = fs.readFileSync(filePath, "utf-8");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('fs') as typeof import('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require('path') as typeof import('path');
+    const filePath = path.join(process.cwd(), 'data', 'system-prompt.md');
+    const content: string = fs.readFileSync(filePath, 'utf-8');
 
     // Extract XML-like sections from system prompt
     const sections = [
-      "identity", "mission", "rules", "format", "out_of_scope_reply",
-      "shipping", "pickup", "payment", "refund_policy", "membership",
-      "brand_story", "contact", "ordering_process", "reminders",
-      "price_reference",
+      'identity',
+      'mission',
+      'rules',
+      'format',
+      'out_of_scope_reply',
+      'shipping',
+      'pickup',
+      'payment',
+      'refund_policy',
+      'membership',
+      'brand_story',
+      'contact',
+      'ordering_process',
+      'reminders',
+      'price_reference',
     ];
 
     for (const section of sections) {
-      const regex = new RegExp(`<${section}[^>]*>([\\s\\S]*?)</${section}>`, "i");
+      const regex = new RegExp(`<${section}[^>]*>([\\s\\S]*?)</${section}>`, 'i');
       const match = content.match(regex);
-      if (match) {
+      if (match?.[1]) {
         map.set(section, match[1].trim());
       }
     }
