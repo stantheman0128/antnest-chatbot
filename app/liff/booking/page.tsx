@@ -56,6 +56,9 @@ const STATUS_STYLE: Record<string, string> = {
 
 // ── Main Component ──────────────────────────────
 
+const FLEXIBLE_PERIODS = ['下午', '傍晚', '晚上', '都可以'] as const;
+type FlexiblePeriod = (typeof FLEXIBLE_PERIODS)[number];
+
 type Tab = 'book' | 'my';
 type BookingStep = 'select-date' | 'fill-form' | 'confirmed';
 
@@ -68,7 +71,12 @@ export default function LiffBookingPage() {
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [bookingStep, setBookingStep] = useState<BookingStep>('select-date');
   const [selected, setSelected] = useState<PickupAvailability | null>(null);
-  const [form, setForm] = useState({ displayName: '', pickupTime: '', orderNumber: '', note: '' });
+  const [form, setForm] = useState({
+    displayName: '',
+    flexiblePeriod: '' as FlexiblePeriod | '',
+    orderNumber: '',
+    note: '',
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,7 +138,12 @@ export default function LiffBookingPage() {
   // ── Booking submit ─────────────────────────────
 
   async function handleSubmit() {
-    if (liffState.status !== 'ready' || !selected || !form.displayName.trim() || !form.pickupTime)
+    if (
+      liffState.status !== 'ready' ||
+      !selected ||
+      !form.displayName.trim() ||
+      !form.flexiblePeriod
+    )
       return;
     setSubmitting(true);
     setError(null);
@@ -143,7 +156,9 @@ export default function LiffBookingPage() {
           availabilityId: selected.id,
           lineUserId: liffState.profile.userId,
           displayName: form.displayName.trim(),
-          pickupTime: form.pickupTime,
+          pickupTime: selected.startTime.slice(0, 5),
+          bookingType: 'flexible',
+          flexiblePeriod: form.flexiblePeriod,
           orderNumber: form.orderNumber || undefined,
           note: form.note || undefined,
         }),
@@ -252,12 +267,7 @@ export default function LiffBookingPage() {
           <div className="text-4xl mb-4">😵</div>
           <h1 className="text-[17px] font-bold text-stone-800 mb-2">無法連線 LINE</h1>
           <p className="text-[13px] text-stone-500 mb-6">{liffState.error}</p>
-          <a
-            href="/booking"
-            className="inline-block px-6 py-3 bg-amber-800 text-white rounded-xl text-[13px] font-medium hover:bg-amber-900 transition-colors"
-          >
-            使用一般預約頁面
-          </a>
+          <p className="text-[13px] text-amber-700">請在 LINE 中開啟此頁面，或聯繫闆娘協助預約</p>
         </div>
       </div>
     );
@@ -276,7 +286,7 @@ export default function LiffBookingPage() {
           <p className="text-amber-700 mb-4">
             {formatDateLabel(selected.availableDate)}
             <br />
-            取貨時間：{form.pickupTime}
+            取貨時段：{form.flexiblePeriod}
           </p>
           <div className="bg-amber-50 rounded-xl p-4 text-[13px] text-amber-800 text-left space-y-1 mb-6">
             <p>📍 取貨地址請確認 LINE 訊息</p>
@@ -288,7 +298,7 @@ export default function LiffBookingPage() {
               onClick={() => {
                 setBookingStep('select-date');
                 setSelected(null);
-                setForm((f) => ({ ...f, pickupTime: '', orderNumber: '', note: '' }));
+                setForm((f) => ({ ...f, flexiblePeriod: '', orderNumber: '', note: '' }));
               }}
               className="flex-1 py-3 border border-stone-200 rounded-xl text-[13px] font-medium text-stone-600 hover:bg-stone-50 transition-colors"
             >
@@ -382,7 +392,7 @@ export default function LiffBookingPage() {
                       key={avail.id}
                       onClick={() => {
                         setSelected(avail);
-                        setForm((f) => ({ ...f, pickupTime: avail.startTime.slice(0, 5) }));
+                        setForm((f) => ({ ...f, flexiblePeriod: '' }));
                         setBookingStep('fill-form');
                         setError(null);
                       }}
@@ -430,21 +440,26 @@ export default function LiffBookingPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-medium text-amber-800 block mb-1">
-                    取貨時間 *
+                  <label className="text-[11px] font-medium text-amber-800 block mb-2">
+                    偏好取貨時段 *
                   </label>
-                  <input
-                    type="time"
-                    min={selected.startTime.slice(0, 5)}
-                    max={selected.endTime.slice(0, 5)}
-                    value={form.pickupTime}
-                    onChange={(e) => setForm((f) => ({ ...f, pickupTime: e.target.value }))}
-                    className="w-full border border-amber-200 rounded-xl p-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  />
-                  <p className="text-[10px] text-amber-500 mt-1">
-                    請選擇 {selected.startTime.slice(0, 5)}–{selected.endTime.slice(0, 5)}{' '}
-                    之間的時間
-                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {FLEXIBLE_PERIODS.map((period) => (
+                      <button
+                        key={period}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, flexiblePeriod: period }))}
+                        className={`py-3 rounded-xl text-[13px] font-medium border transition-colors ${
+                          form.flexiblePeriod === period
+                            ? 'bg-amber-800 text-white border-amber-800'
+                            : 'border-amber-200 text-amber-800 hover:bg-amber-50'
+                        }`}
+                      >
+                        {period}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-amber-500 mt-1">闆娘會依時段與你確認確切時間</p>
                 </div>
 
                 <div>
@@ -490,7 +505,7 @@ export default function LiffBookingPage() {
 
                 <button
                   onClick={() => void handleSubmit()}
-                  disabled={submitting || !form.displayName.trim() || !form.pickupTime}
+                  disabled={submitting || !form.displayName.trim() || !form.flexiblePeriod}
                   className="w-full py-3.5 bg-amber-800 text-white rounded-xl text-[13px] font-bold hover:bg-amber-900 disabled:opacity-50 transition-colors"
                 >
                   {submitting ? '預約中...' : '確認預約'}

@@ -22,6 +22,22 @@ export interface AIResponse {
   showPickupLink: boolean;
 }
 
+export interface ClassificationResult {
+  topic: string;
+  confidence: 'high' | 'low';
+  latencyMs: number;
+}
+
+export const MODEL_DEFAULTS = {
+  classifier_model: 'gemini-2.5-flash-lite',
+  ai_model: 'gemini-2.5-flash',
+  strong_ai_model: 'gemini-2.5-pro',
+  failover_model: 'gemini-2.5-flash',
+  summary_model: 'gemini-2.5-flash-lite',
+} as const;
+
+export const STRONG_MODEL_DEFAULT = MODEL_DEFAULTS.strong_ai_model;
+
 function getAIClient() {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey || apiKey === 'your_google_ai_key_here') {
@@ -289,8 +305,96 @@ function sanitizeUserInput(message: string): string {
   return sanitized;
 }
 
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
-const FAILOVER_MODEL = 'gemini-2.5-flash';
+const DEFAULT_MODEL = MODEL_DEFAULTS.ai_model;
+const FAILOVER_MODEL = MODEL_DEFAULTS.failover_model;
+
+// ── Intent Classification ──────────────────────────────
+
+const INTENT_TOPICS = [
+  '商品介紹',
+  '價格',
+  '運費物流',
+  '付款方式',
+  '訂購流程',
+  '保存食用',
+  '預約取貨',
+  '開單補貨',
+  '退換貨',
+  '會員優惠',
+  '品牌資訊',
+  '閒聊問候',
+  '其他',
+] as const;
+
+const CLASSIFICATION_PROMPT = `你是意圖分類器。根據顧客訊息，只回傳一個 JSON 物件，不要加任何其他文字。
+
+格式：{"topic":"<TOPIC>","confidence":"high|low"}
+
+TOPIC 必須是以下之一：
+• 商品介紹 — 詢問口味、規格、成分、酒精、素食、特色
+• 價格 — 詢問價格、多少錢、價目表
+• 運費物流 — 運費、配送、出貨、宅配、超商取貨、物流
+• 付款方式 — 怎麼付、信用卡、轉帳、Apple Pay
+• 訂購流程 — 怎麼買、怎麼訂、下單、購買流程
+• 保存食用 — 怎麼保存、保存期限、怎麼吃、退冰、回烤
+• 預約取貨 — 想預約、自取、面交、約取貨時間
+• 開單補貨 — 下次開單、什麼時候補貨、什麼時候有貨、還會進貨嗎、何時開放購買
+• 退換貨 — 退貨、退款、換貨、商品有問題
+• 會員優惠 — 會員、折扣、優惠、紅利、點數
+• 品牌資訊 — 品牌故事、地址、電話、營業時間、聯絡方式
+• 閒聊問候 — 打招呼、道謝、你好、謝謝、好的
+• 其他 — 以上都不符合、意圖不明、需要複雜推理
+
+confidence 規則：
+• high — 意圖明確
+• low — 意圖模糊，可能有多種解讀`;
+
+export async function classifyIntent(message: string): Promise<ClassificationResult> {
+  const startTime = Date.now();
+  try {
+    const { getConfig } = await import('./data-service');
+    const classifierModel =
+      (await getConfig('classifier_model')) || MODEL_DEFAULTS.classifier_model;
+
+    const genAI = getAIClient();
+    const model = genAI.getGenerativeModel({
+      model: classifierModel,
+      systemInstruction: CLASSIFICATION_PROMPT,
+    });
+
+    const result = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: message }] }],
+        generationConfig: { maxOutputTokens: 64, temperature: 0 },
+      }),
+      3000,
+      'classify',
+    );
+
+    const raw = result.response.text().trim();
+    const latencyMs = Date.now() - startTime;
+    console.log(`[AI] classify latency=${latencyMs}ms raw=${raw}`);
+
+    try {
+      const parsed = JSON.parse(raw) as { topic?: string; confidence?: string };
+      const topic = (INTENT_TOPICS as readonly string[]).includes(parsed.topic || '')
+        ? parsed.topic!
+        : '其他';
+      const confidence = parsed.confidence === 'high' ? 'high' : 'low';
+      return { topic, confidence, latencyMs };
+    } catch {
+      const match = /"topic"\s*:\s*"([^"]+)"/.exec(raw);
+      const topic =
+        match && (INTENT_TOPICS as readonly string[]).includes(match[1]) ? match[1] : '其他';
+      return { topic, confidence: 'low', latencyMs };
+    }
+  } catch (err: unknown) {
+    const latencyMs = Date.now() - startTime;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[AI] classify failed: ${msg} (${latencyMs}ms)`);
+    return { topic: '其他', confidence: 'low', latencyMs };
+  }
+}
 
 async function callGemini(
   message: string,
@@ -359,22 +463,28 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 /**
  * Generate AI response with auto-failover.
- * 1. Try admin-configured model (default: gemini-2.5-flash-lite) with 8s timeout
- * 2. If timeout/error → failover to gemini-2.5-flash with 15s timeout
+ * 1. Try admin-configured model with 8s timeout (12s if strong model override)
+ * 2. If timeout/error → failover to configurable failover model with 15s timeout
  * 3. If still fails → return fallback message
  */
 export async function generateAIResponse(
   message: string,
   history: MessageHistory[] = [],
+  modelOverride?: string,
 ): Promise<AIResponse> {
-  // Attempt 1: primary model (fast, with 8s timeout)
+  // Pre-load failover model config (cached, no extra latency)
+  const { getConfig } = await import('./data-service');
+  const failoverModel = (await getConfig('failover_model')) || FAILOVER_MODEL;
+
+  // Attempt 1: primary model (fast, with 8s timeout; 12s if using strong model override)
+  const primaryTimeout = modelOverride ? 12000 : 8000;
   try {
     const startTime = Date.now();
     const {
       text: textContent,
       validIds,
       model,
-    } = await withTimeout(callGemini(message, history), 8000, 'primary');
+    } = await withTimeout(callGemini(message, history, modelOverride), primaryTimeout, 'primary');
     const latencyMs = Date.now() - startTime;
     console.log(
       `[AI] model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`,
@@ -388,14 +498,14 @@ export async function generateAIResponse(
     console.warn(`[AI] Primary model failed: ${msg}`);
   }
 
-  // Attempt 2: failover model (smarter, with 15s timeout)
+  // Attempt 2: failover model (configurable, with 15s timeout)
   try {
     const startTime = Date.now();
     const {
       text: textContent,
       validIds,
       model,
-    } = await withTimeout(callGemini(message, history, FAILOVER_MODEL), 15000, 'failover');
+    } = await withTimeout(callGemini(message, history, failoverModel), 15000, 'failover');
     const latencyMs = Date.now() - startTime;
     console.log(
       `[AI] failover model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`,
@@ -422,9 +532,12 @@ export async function generateConversationSummary(
   if (messages.length === 0) return '尚無對話紀錄';
 
   try {
+    const { getConfig } = await import('./data-service');
+    const summaryModel = (await getConfig('summary_model')) || MODEL_DEFAULTS.summary_model;
+
     const genAI = getAIClient();
     const model = genAI.getGenerativeModel({
-      model: FAILOVER_MODEL,
+      model: summaryModel,
       systemInstruction:
         '你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。',
     });

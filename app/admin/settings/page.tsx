@@ -265,55 +265,136 @@ export default function SettingsPage() {
     <div className="space-y-5">
       <h1 className="text-[17px] font-semibold text-stone-800">系統設定</h1>
 
-      {/* AI Model selection */}
+      {/* AI Model configuration */}
       <div>
         <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-3">
-          AI 模型
+          AI 模型配置
         </p>
-        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-3.5 space-y-2">
-          <div>
-            <p className="text-[13px] font-medium text-stone-800">回覆模型</p>
-            <p className="text-[11px] text-stone-400 mt-0.5">
-              選擇小螞蟻使用的 AI 模型（太慢時會自動切換備援模型）
-            </p>
-          </div>
-          <select
-            value={configs.get('ai_model') || 'gemini-2.5-flash-lite'}
-            onChange={(e) =>
+        <div className="bg-white rounded-2xl border border-stone-100 px-4 py-4 space-y-4">
+          {(
+            [
+              {
+                key: 'classifier_model',
+                label: '意圖分類器',
+                desc: '分類用戶意圖，需要最快速度',
+                defaultVal: 'gemini-2.5-flash-lite',
+              },
+              {
+                key: 'ai_model',
+                label: '標準回答',
+                desc: '已知主題的回答',
+                defaultVal: 'gemini-2.5-flash',
+              },
+              {
+                key: 'strong_ai_model',
+                label: '強模型',
+                desc: '模糊/複雜問題，需要更強推理力',
+                defaultVal: 'gemini-2.5-pro',
+              },
+              {
+                key: 'failover_model',
+                label: 'Failover',
+                desc: '主模型失敗時的備援',
+                defaultVal: 'gemini-2.5-flash',
+              },
+              {
+                key: 'summary_model',
+                label: '對話摘要',
+                desc: 'Admin 後台的對話摘要生成',
+                defaultVal: 'gemini-2.5-flash-lite',
+              },
+            ] as const
+          ).map(({ key, label, desc, defaultVal }) => (
+            <div key={key}>
+              <div className="flex items-baseline justify-between mb-1">
+                <p className="text-[13px] font-medium text-stone-800">{label}</p>
+                <p className="text-[10px] text-stone-300">
+                  預設：{defaultVal.replace('gemini-', '')}
+                </p>
+              </div>
+              <p className="text-[11px] text-stone-400 mb-1.5">{desc}</p>
+              <select
+                value={configs.get(key) || defaultVal}
+                onChange={(e) =>
+                  void (async () => {
+                    const value = e.target.value;
+                    try {
+                      const res = await fetch('/api/admin/config', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${getToken()}`,
+                        },
+                        body: JSON.stringify({ key, value }),
+                      });
+                      if (res.ok) {
+                        setConfigs((prev) => {
+                          const m = new Map(prev);
+                          m.set(key, value);
+                          return m;
+                        });
+                        toast(`${label} 已切換為 ${value.replace('gemini-', '')}`);
+                      }
+                    } catch {
+                      toast(`切換 ${label} 失敗`, 'error');
+                    }
+                  })()
+                }
+                className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[13px] text-stone-700 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700"
+              >
+                <option value="gemini-2.5-flash-lite">2.5 Flash-Lite（最快）</option>
+                <option value="gemini-2.5-flash">2.5 Flash（均衡）</option>
+                <option value="gemini-2.5-pro">2.5 Pro（最強推理）</option>
+                <option value="gemini-3-flash-preview">3 Flash Preview（實驗性）</option>
+                <option value="gemini-3.1-flash-lite-preview">
+                  3.1 Flash-Lite Preview（實驗性）
+                </option>
+              </select>
+            </div>
+          ))}
+
+          {/* Reset to defaults button */}
+          <button
+            onClick={() =>
               void (async () => {
-                const value = e.target.value;
+                if (!confirm('確定要恢復所有模型為預設設定嗎？')) return;
+                const defaults: Record<string, string> = {
+                  classifier_model: 'gemini-2.5-flash-lite',
+                  ai_model: 'gemini-2.5-flash',
+                  strong_ai_model: 'gemini-2.5-pro',
+                  failover_model: 'gemini-2.5-flash',
+                  summary_model: 'gemini-2.5-flash-lite',
+                };
                 try {
-                  const res = await fetch('/api/admin/config', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${getToken()}`,
-                    },
-                    body: JSON.stringify({ key: 'ai_model', value }),
+                  await Promise.all(
+                    Object.entries(defaults).map(([key, value]) =>
+                      fetch('/api/admin/config', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${getToken()}`,
+                        },
+                        body: JSON.stringify({ key, value }),
+                      }),
+                    ),
+                  );
+                  setConfigs((prev) => {
+                    const m = new Map(prev);
+                    for (const [key, value] of Object.entries(defaults)) {
+                      m.set(key, value);
+                    }
+                    return m;
                   });
-                  if (res.ok) {
-                    setConfigs((prev) => {
-                      const m = new Map(prev);
-                      m.set('ai_model', value);
-                      return m;
-                    });
-                    toast('模型已切換為 ' + value);
-                  }
+                  toast('已恢復所有模型為預設設定');
                 } catch {
-                  toast('切換模型失敗', 'error');
+                  toast('恢復預設失敗', 'error');
                 }
               })()
             }
-            className="w-full px-3 py-2 border border-stone-200 rounded-xl text-[13px] text-stone-700 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/15 focus:border-amber-700"
+            className="w-full py-2.5 border border-stone-200 rounded-xl text-[12px] font-medium text-stone-500 hover:bg-stone-50 transition-colors"
           >
-            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite（推薦，最快）</option>
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash（較聰明）</option>
-            <option value="gemini-2.5-pro">Gemini 2.5 Pro（最聰明，較慢）</option>
-            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview（實驗性）</option>
-            <option value="gemini-3.1-flash-lite-preview">
-              Gemini 3.1 Flash-Lite Preview（實驗性，可能很慢）
-            </option>
-          </select>
+            恢復預設模型設定
+          </button>
         </div>
       </div>
 

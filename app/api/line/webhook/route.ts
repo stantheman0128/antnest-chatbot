@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { generateAIResponse, splitResponse } from '@/lib/ai-client';
+import {
+  STRONG_MODEL_DEFAULT,
+  classifyIntent,
+  generateAIResponse,
+  splitResponse,
+} from '@/lib/ai-client';
 import {
   createReservation,
   deleteConfig,
@@ -384,8 +389,19 @@ async function handleTextMessage(
     return;
   }
 
-  // 下次開單 → reply with configured announcement
-  if (userMessage.includes('下次開單') || userMessage.includes('開單時間')) {
+  // 下次開單 / 補貨 → reply with configured announcement
+  if (
+    userMessage.includes('下次開單') ||
+    userMessage.includes('開單時間') ||
+    userMessage.includes('補貨') ||
+    userMessage.includes('什麼時候有貨') ||
+    userMessage.includes('什麼時候可以買') ||
+    userMessage.includes('什麼時候能買') ||
+    userMessage.includes('什麼時候開放') ||
+    userMessage.includes('何時補') ||
+    userMessage.includes('還有貨嗎') ||
+    userMessage.includes('有沒有貨')
+  ) {
     const announcement = await getConfig('next_order_announcement');
     const msg: TextMessage = {
       type: 'text',
@@ -393,6 +409,8 @@ async function handleTextMessage(
       quickReply: getPausedQuickReply(),
     };
     await sendMessages(event.replyToken, userId, [msg]);
+    if (userId)
+      void logConversation(userId, 'bot', msg.text, { action: 'next_order_announcement' });
     return;
   }
 
@@ -448,6 +466,62 @@ async function handleTextMessage(
     }).catch(() => {});
   }
 
+  // ── Tier 1.5: Intent Classification ──────────────────
+  const classification = await classifyIntent(userMessage);
+  const { topic: classifiedTopic, confidence: classificationConfidence } = classification;
+  console.log(
+    `LINE: classified="${classifiedTopic}" confidence=${classificationConfidence} latency=${classification.latencyMs}ms msg="${userMessage.slice(0, 50)}"`,
+  );
+
+  // Direct-response: 開單補貨 → return config value, no AI needed
+  if (classifiedTopic === '開單補貨' && classificationConfidence === 'high') {
+    const announcement = await getConfig('next_order_announcement');
+    const msg: TextMessage = {
+      type: 'text',
+      text: announcement || '目前還沒有下次開單的資訊喔～\n請追蹤我們的官方帳號以獲取最新消息 😊',
+      quickReply: getQuickReply(false),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    if (userId)
+      void logConversation(userId, 'bot', msg.text, {
+        action: 'classified_direct',
+        classifiedTopic,
+        classificationLatencyMs: classification.latencyMs,
+      });
+    return;
+  }
+
+  // Direct-response: 預約取貨 → show pickup carousel, no AI needed
+  if (classifiedTopic === '預約取貨' && classificationConfidence === 'high') {
+    await sendPickupDateCarousel(event.replyToken, userId);
+    if (userId) await touchBotActivity(userId);
+    if (userId)
+      void logConversation(userId, 'bot', '(預約取貨 carousel via classification)', {
+        action: 'pickup_carousel',
+        classifiedTopic,
+        classificationLatencyMs: classification.latencyMs,
+      });
+    return;
+  }
+
+  // Determine model: known topics → default (Flash-Lite), '其他' → strong model
+  const knownTopics = [
+    '商品介紹',
+    '價格',
+    '運費物流',
+    '付款方式',
+    '訂購流程',
+    '保存食用',
+    '退換貨',
+    '會員優惠',
+    '品牌資訊',
+    '閒聊問候',
+  ];
+  const useStrongModel = !knownTopics.includes(classifiedTopic);
+  const strongModelId = useStrongModel
+    ? (await getConfig('strong_ai_model')) || STRONG_MODEL_DEFAULT
+    : undefined;
+
   // Refresh stock from CYBERBIZ if stale and user is asking about availability
   if (isStockQuery(userMessage)) {
     await refreshStockIfStale();
@@ -464,7 +538,10 @@ async function handleTextMessage(
     const recentHistory = userId ? await getConversationHistory(userId, 20) : [];
     const history = recentHistory.reverse().map((h) => ({ role: h.role, content: h.content }));
 
-    aiResponse = await Promise.race([generateAIResponse(userMessage, history), timeoutPromise]);
+    aiResponse = await Promise.race([
+      generateAIResponse(userMessage, history, strongModelId),
+      timeoutPromise,
+    ]);
   } catch (err: unknown) {
     const errMessage = err instanceof Error ? err.message : String(err);
     console.error('LINE: AI generation failed:', errMessage);
@@ -548,6 +625,10 @@ async function handleTextMessage(
     const productIds = aiResponse.productSpecs.map((p) => p.id);
     void logConversation(userId, 'bot', aiResponse.text, {
       latencyMs: aiLatencyMs,
+      classifiedTopic,
+      classificationConfidence,
+      classificationLatencyMs: classification.latencyMs,
+      modelUsed: useStrongModel ? 'strong' : 'primary',
       ...(productIds.length > 0 ? { products: productIds } : {}),
     });
   }
