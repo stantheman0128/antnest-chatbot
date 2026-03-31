@@ -424,6 +424,27 @@ async function handleTextMessage(
     return;
   }
 
+  // 回饋/建議 → same as FEEDBACK:BAD postback
+  if (
+    userMessage.includes('回饋') ||
+    userMessage.includes('建議') ||
+    userMessage.includes('意見') ||
+    userMessage.includes('不滿意')
+  ) {
+    if (userId)
+      void logConversation(userId, 'user', `[回饋] ${userMessage}`, {
+        feedback: 'bad',
+        flagged: true,
+      });
+    const msg: TextMessage = {
+      type: 'text',
+      text: '謝謝你願意給我們回饋！已記錄下來，闆娘會盡快查看 💗\n\n如果需要闆娘親自處理，可以點下方「呼叫闆娘」喔！',
+      quickReply: getQuickReply(false, true),
+    };
+    await sendMessages(event.replyToken, userId, [msg]);
+    return;
+  }
+
   // Pending note: if user just made a reservation and types text, save as note
   // Placed AFTER all keyword checks to prevent keywords being saved as notes
   if (userId) {
