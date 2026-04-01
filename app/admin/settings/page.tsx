@@ -362,7 +362,7 @@ export default function SettingsPage() {
                   classifier_model: 'gemini-2.5-flash-lite',
                   ai_model: 'gemini-2.5-flash',
                   strong_ai_model: 'gemini-2.5-pro',
-                  failover_model: 'gemini-2.5-flash',
+                  failover_model: 'gemini-2.5-flash-lite',
                   summary_model: 'gemini-2.5-flash-lite',
                 };
                 try {
