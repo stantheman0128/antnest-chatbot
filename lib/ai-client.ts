@@ -29,11 +29,11 @@ export interface ClassificationResult {
 }
 
 export const MODEL_DEFAULTS = {
-  classifier_model: 'gpt-4.1-mini',
-  ai_model: 'gpt-4.1-mini',
-  strong_ai_model: 'gpt-4.1',
-  failover_model: 'gpt-4.1-nano',
-  summary_model: 'gpt-4.1-nano',
+  classifier_model: 'gemini-2.5-flash-lite',
+  ai_model: 'gemini-2.5-flash',
+  strong_ai_model: 'gemini-2.5-pro',
+  failover_model: 'gemini-2.5-flash-lite',
+  summary_model: 'gemini-2.5-flash-lite',
 } as const;
 
 export const STRONG_MODEL_DEFAULT = MODEL_DEFAULTS.strong_ai_model;
