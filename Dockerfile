@@ -1,20 +1,24 @@
-FROM node:22-slim AS base
-
+FROM node:22-slim AS deps
 WORKDIR /app
-
-# Install dependencies
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+ENV HUSKY=0
+RUN npm ci
 
-# Copy source
+FROM node:22-slim AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Build
+ENV HUSKY=0
 RUN npm run build
 
-# Production
+FROM node:22-slim AS runner
+WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-EXPOSE 3000
 
-CMD ["npm", "start"]
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+CMD ["node", "server.js"]
