@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
 import { getActiveProducts } from './data-service';
 import { getSystemPrompt } from './knowledge-base';
@@ -29,27 +29,26 @@ export interface ClassificationResult {
 }
 
 export const MODEL_DEFAULTS = {
-  classifier_model: 'gemini-2.5-flash-lite',
-  ai_model: 'gemini-2.5-flash',
-  strong_ai_model: 'gemini-2.5-pro',
-  failover_model: 'gemini-2.5-flash-lite',
-  summary_model: 'gemini-2.5-flash-lite',
+  classifier_model: 'gpt-4.1-mini',
+  ai_model: 'gpt-4.1-mini',
+  strong_ai_model: 'gpt-4.1',
+  failover_model: 'gpt-4.1-nano',
+  summary_model: 'gpt-4.1-nano',
 } as const;
 
 export const STRONG_MODEL_DEFAULT = MODEL_DEFAULTS.strong_ai_model;
 
 function getAIClient() {
-  const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey || apiKey === 'your_google_ai_key_here') {
+  const apiKey = process.env.ZEABUR_AI_HUB_KEY;
+  if (!apiKey) {
     throw new Error(
-      'GOOGLE_AI_API_KEY not configured. Please:\n' +
-        '1. Visit https://aistudio.google.com/apikey\n' +
-        '2. Create a new API key\n' +
-        '3. Add it to .env.local as: GOOGLE_AI_API_KEY=your_actual_key\n' +
-        '4. Restart the development server',
+      'ZEABUR_AI_HUB_KEY not configured. Please add it to your environment variables.',
     );
   }
-  return new GoogleGenerativeAI(apiKey);
+  return new OpenAI({
+    baseURL: 'https://hnd1.aihub.zeabur.ai/v1',
+    apiKey,
+  });
 }
 
 /**
@@ -358,22 +357,22 @@ export async function classifyIntent(message: string): Promise<ClassificationRes
     const classifierModel =
       (await getConfig('classifier_model')) || MODEL_DEFAULTS.classifier_model;
 
-    const genAI = getAIClient();
-    const model = genAI.getGenerativeModel({
-      model: classifierModel,
-      systemInstruction: CLASSIFICATION_PROMPT,
-    });
-
+    const client = getAIClient();
     const result = await withTimeout(
-      model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: message }] }],
-        generationConfig: { maxOutputTokens: 64, temperature: 0 },
+      client.chat.completions.create({
+        model: classifierModel,
+        messages: [
+          { role: 'system', content: CLASSIFICATION_PROMPT },
+          { role: 'user', content: message },
+        ],
+        max_tokens: 64,
+        temperature: 0,
       }),
       3000,
       'classify',
     );
 
-    const raw = result.response.text().trim();
+    const raw = (result.choices[0]?.message?.content || '').trim();
     const latencyMs = Date.now() - startTime;
     console.log(`[AI] classify latency=${latencyMs}ms raw=${raw}`);
 
@@ -398,12 +397,12 @@ export async function classifyIntent(message: string): Promise<ClassificationRes
   }
 }
 
-async function callGemini(
+async function callAI(
   message: string,
   history: MessageHistory[],
   modelOverride?: string,
 ): Promise<{ text: string; validIds: string[]; model: string }> {
-  const genAI = getAIClient();
+  const client = getAIClient();
 
   // Load system prompt, product card instruction, and admin-configured model in parallel
   const { getConfig } = await import('./data-service');
@@ -416,32 +415,32 @@ async function callGemini(
   const modelId = modelOverride || configModel || DEFAULT_MODEL;
   const fullPrompt = systemPrompt + '\n\n<!-- output instructions -->\n' + instruction;
 
-  const model = genAI.getGenerativeModel({
-    model: modelId,
-    systemInstruction: fullPrompt,
-  });
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: fullPrompt },
+  ];
 
-  const contents = history
-    .filter((msg) => msg.role && msg.content)
-    .map((msg) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }],
-    }));
+  for (const msg of history) {
+    if (msg.role && msg.content) {
+      messages.push({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+      });
+    }
+  }
 
-  contents.push({
+  messages.push({
     role: 'user',
-    parts: [{ text: sanitizeUserInput(message) }],
+    content: sanitizeUserInput(message),
   });
 
-  const response = await model.generateContent({
-    contents,
-    generationConfig: {
-      maxOutputTokens: 2048,
-      temperature: 0.5,
-    },
+  const response = await client.chat.completions.create({
+    model: modelId,
+    messages,
+    max_tokens: 2048,
+    temperature: 0.5,
   });
 
-  return { text: response.response.text() || '', validIds, model: modelId };
+  return { text: response.choices[0]?.message?.content || '', validIds, model: modelId };
 }
 
 const FALLBACK: AIResponse = {
@@ -486,7 +485,7 @@ export async function generateAIResponse(
       text: textContent,
       validIds,
       model,
-    } = await withTimeout(callGemini(message, history, modelOverride), primaryTimeout, 'primary');
+    } = await withTimeout(callAI(message, history, modelOverride), primaryTimeout, 'primary');
     const latencyMs = Date.now() - startTime;
     console.log(
       `[AI] model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`,
@@ -507,7 +506,7 @@ export async function generateAIResponse(
       text: textContent,
       validIds,
       model,
-    } = await withTimeout(callGemini(message, history, failoverModel), 15000, 'failover');
+    } = await withTimeout(callAI(message, history, failoverModel), 15000, 'failover');
     const latencyMs = Date.now() - startTime;
     console.log(
       `[AI] failover model=${model} latency=${latencyMs}ms input_len=${message.length} output_len=${textContent.length}`,
@@ -537,27 +536,30 @@ export async function generateConversationSummary(
     const { getConfig } = await import('./data-service');
     const summaryModel = (await getConfig('summary_model')) || MODEL_DEFAULTS.summary_model;
 
-    const genAI = getAIClient();
-    const model = genAI.getGenerativeModel({
-      model: summaryModel,
-      systemInstruction:
-        '你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。',
-    });
-
+    const client = getAIClient();
     const conversationText = messages
       .map((m) => (m.role === 'user' ? '顧客：' : '客服：') + m.content)
       .join('\n');
 
     const response = await withTimeout(
-      model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: conversationText }] }],
-        generationConfig: { maxOutputTokens: 2048, temperature: 0.3 },
+      client.chat.completions.create({
+        model: summaryModel,
+        messages: [
+          {
+            role: 'system',
+            content:
+              '你是一個對話分析助手。用一句繁體中文簡短總結這位顧客最近主要在詢問什麼。不要超過 50 字。只輸出總結，不要加任何前綴或說明。',
+          },
+          { role: 'user', content: conversationText },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
       }),
       20000,
       'summary',
     );
 
-    return response.response.text()?.trim() || '無法生成摘要';
+    return response.choices[0]?.message?.content?.trim() || '無法生成摘要';
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('generateConversationSummary error:', msg);
