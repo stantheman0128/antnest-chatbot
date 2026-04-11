@@ -2,13 +2,13 @@
 
 ## Deployment
 
-This project is deployed on **two platforms simultaneously**:
-
-### Zeabur (Primary - VPS)
+### Zeabur (Production)
 
 - **URL**: https://antnest-chatbot-0410.zeabur.app
 - **VPS**: Tencent Cloud Tokyo (43.167.169.222), 2vCPU/2GB
-- **AI Model**: Zeabur AI Hub (GPT-4.1 family via OpenAI-compatible API)
+- **AI Model**: Zeabur AI Hub (configurable via `AI_MODEL` env var)
+- **LINE Webhook**: Points here — all real customer traffic goes through Zeabur
+- **Cron**: Product sync via Upstash QStash (every Monday 20:05 TST)
 - **Project ID**: `69d9080ee8ec40d5bceac2c7`
 - **Service ID**: `69d90817e8ec40d5bceac2ca`
 - **Env ID**: `69d9080e474db8a99d6de860`
@@ -20,16 +20,17 @@ cd C:\Users\stans\Projects\antnest-chatbot
 zeabur deploy --project-id 69d9080ee8ec40d5bceac2c7 --service-id 69d90817e8ec40d5bceac2ca --name antnest-chatbot
 ```
 
-### Vercel (Legacy)
+### Vercel (Preview/Staging)
 
 - **URL**: https://antnest-chatbot.vercel.app
-- **AI Model**: Google Gemini 2.5 Flash
-- **Auto-deploy**: push to `main` branch triggers build
+- **AI Model**: Google Gemini 2.5 Flash (free tier for testing)
+- **Auto-deploy**: push to `main` triggers build — use to verify changes before Zeabur deploy
+- **Role**: Preview only. Do NOT point LINE Webhook here. No cron jobs.
 
 ### Shared Infrastructure
 
 - Both deployments share the **same Supabase database** — admin changes apply to both
-- LINE Webhook can only point to one deployment at a time
+- LINE Webhook points to Zeabur only
 
 ## Git Workflow
 
@@ -42,9 +43,10 @@ zeabur deploy --project-id 69d9080ee8ec40d5bceac2c7 --service-id 69d90817e8ec40d
 
 ## Environment Variables
 
-- **Zeabur**: `ZEABUR_AI_HUB_KEY` (Zeabur AI Hub)
-- **Vercel**: `GOOGLE_AI_API_KEY` (Google Gemini)
-- Both share: LINE keys, Supabase keys, Admin keys, LIFF ID
+- **Zeabur (Production)**: `ZEABUR_AI_HUB_KEY`, `AI_BASE_URL`, `AI_MODEL`, `CRON_SECRET`
+- **Vercel (Preview)**: `GOOGLE_AI_API_KEY` (Gemini, for testing only)
+- **Both share**: LINE keys, Supabase keys, Admin keys, LIFF ID
+- **Full list**: See `.env.example`
 
 ## Checklists
 
