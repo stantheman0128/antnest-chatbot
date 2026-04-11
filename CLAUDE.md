@@ -43,7 +43,7 @@ zeabur deploy --project-id 69d9080ee8ec40d5bceac2c7 --service-id 69d90817e8ec40d
 
 ## Environment Variables
 
-- **Zeabur (Production)**: `ZEABUR_AI_HUB_KEY`, `AI_BASE_URL`, `AI_MODEL`, `CRON_SECRET`
+- **Zeabur (Production)**: `ZEABUR_AI_HUB_KEY`, `AI_BASE_URL`, `AI_MODEL`, `AI_MODEL_*` series, `CRON_SECRET`
 - **Vercel (Preview)**: `GOOGLE_AI_API_KEY` (Gemini, for testing only)
 - **Both share**: LINE keys, Supabase keys, Admin keys, LIFF ID
 - **Full list**: See `.env.example`
