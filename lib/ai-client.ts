@@ -29,12 +29,12 @@ export interface ClassificationResult {
 }
 
 export const MODEL_DEFAULTS = {
-  classifier_model: 'gemini-2.5-flash-lite',
-  ai_model: 'gemini-2.5-flash',
-  strong_ai_model: 'gemini-2.5-pro',
-  failover_model: 'gemini-2.5-flash-lite',
-  summary_model: 'gemini-2.5-flash-lite',
-} as const;
+  classifier_model: process.env.AI_MODEL_CLASSIFIER || 'gemini-2.5-flash-lite',
+  ai_model: process.env.AI_MODEL || 'gemini-2.5-flash',
+  strong_ai_model: process.env.AI_MODEL_STRONG || 'gemini-2.5-pro',
+  failover_model: process.env.AI_MODEL_FAILOVER || 'gemini-2.5-flash-lite',
+  summary_model: process.env.AI_MODEL_SUMMARY || 'gemini-2.5-flash-lite',
+};
 
 export const STRONG_MODEL_DEFAULT = MODEL_DEFAULTS.strong_ai_model;
 
@@ -46,7 +46,7 @@ function getAIClient() {
     );
   }
   return new OpenAI({
-    baseURL: 'https://hnd1.aihub.zeabur.ai/v1',
+    baseURL: process.env.AI_BASE_URL || 'https://hnd1.aihub.zeabur.ai/v1',
     apiKey,
   });
 }

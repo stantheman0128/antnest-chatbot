@@ -46,6 +46,19 @@ zeabur deploy --project-id 69d9080ee8ec40d5bceac2c7 --service-id 69d90817e8ec40d
 - **Vercel**: `GOOGLE_AI_API_KEY` (Google Gemini)
 - Both share: LINE keys, Supabase keys, Admin keys, LIFF ID
 
+## Checklists
+
+### Pre-push
+
+- Verify `.gitignore` is properly configured before pushing
+- Never commit `.env.local` or any file containing secrets (API keys, tokens)
+- Run `npm run build` to confirm the project compiles
+
+### Version Release
+
+- Update the version number in `package.json`
+- Verify all environment variables are documented in `.env.example`
+
 ## Tech Stack
 
 - Next.js 16 (App Router) + TypeScript + Tailwind CSS v4
