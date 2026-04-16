@@ -668,8 +668,9 @@ async function handleTextMessage(
   try {
     await sendMessages(event.replyToken, userId, messages);
   } catch (sendError) {
-    console.error('LINE: Failed to send message:', sendError);
-    // Log the failure for debugging
+    const se = sendError as { response?: { status?: number; data?: unknown }; message?: string; code?: string };
+    const lineBody = se.response?.data ? JSON.stringify(se.response.data).slice(0, 500) : 'no-response-body';
+    console.error(`LINE_SEND_FAIL status=${se.response?.status} code=${se.code} msg=${se.message?.slice(0, 200)} lineBody=${lineBody}`);
     const errMsg = sendError instanceof Error ? sendError.message : String(sendError);
     if (userId)
       void logConversation(userId, 'bot', '[送出失敗] ' + errMsg, {
