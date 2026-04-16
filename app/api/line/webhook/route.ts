@@ -89,7 +89,18 @@ function getLineClient() {
 }
 
 async function sendMessages(replyToken: string, _userId: string | undefined, messages: Message[]) {
-  await getLineClient().replyMessage(replyToken, messages);
+  try {
+    await getLineClient().replyMessage(replyToken, messages);
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number; data?: unknown }; message?: string };
+    console.log('LINE_DEBUG: replyMessage failed', JSON.stringify({
+      replyToken,
+      status: e.response?.status,
+      lineError: e.response?.data,
+      errMessage: e.message,
+    }));
+    throw err;
+  }
 }
 
 interface LineProfile {
