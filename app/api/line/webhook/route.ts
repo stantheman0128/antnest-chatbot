@@ -89,16 +89,16 @@ function getLineClient() {
 }
 
 async function sendMessages(replyToken: string, _userId: string | undefined, messages: Message[]) {
+  const startedAt = Date.now();
   try {
     await getLineClient().replyMessage(replyToken, messages);
   } catch (err: unknown) {
     const e = err as { response?: { status?: number; data?: unknown }; message?: string };
-    console.log('LINE_DEBUG: replyMessage failed', JSON.stringify({
-      replyToken,
-      status: e.response?.status,
-      lineError: e.response?.data,
-      errMessage: e.message,
-    }));
+    const status = e.response?.status ?? 'unknown';
+    const lineErrorBody = e.response?.data ? JSON.stringify(e.response.data).slice(0, 500) : 'no body';
+    const errMsg = e.message ?? 'no message';
+    const elapsedMs = Date.now() - startedAt;
+    console.log(`LINE_DEBUG_REPLY_FAIL token=${replyToken.slice(0, 8)} status=${status} elapsed=${elapsedMs}ms msg=${errMsg} body=${lineErrorBody}`);
     throw err;
   }
 }
@@ -803,10 +803,20 @@ async function handlePostback(
 }
 
 export async function POST(req: NextRequest) {
+  const requestReceivedAt = Date.now();
   try {
     const body = await req.text();
     const signature = req.headers.get('x-line-signature');
     const channelSecret = process.env.LINE_CHANNEL_SECRET || '';
+    // Try to extract event timestamp from body to measure forwarding delay
+    try {
+      const peek = JSON.parse(body) as { events?: { timestamp?: number; replyToken?: string }[] };
+      const evt = peek.events?.[0];
+      if (evt?.timestamp) {
+        const forwardingDelayMs = requestReceivedAt - evt.timestamp;
+        console.log(`LINE_DEBUG_RECV token=${evt.replyToken?.slice(0, 8)} forwarding_delay_ms=${forwardingDelayMs} (negative=clock skew, positive=cyberbiz proxy lag)`);
+      }
+    } catch { /* ignore */ }
 
     // Verify LINE signature — reject forged requests
     if (!signature || !channelSecret || !validateSignature(body, channelSecret, signature)) {
