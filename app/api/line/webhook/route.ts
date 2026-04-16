@@ -799,7 +799,17 @@ export async function POST(req: NextRequest) {
 
     // Verify LINE signature — reject forged requests
     if (!signature || !channelSecret || !validateSignature(body, channelSecret, signature)) {
-      console.log('LINE: Invalid or missing signature, rejecting');
+      const allHeaders: Record<string, string> = {};
+      req.headers.forEach((v, k) => { allHeaders[k] = v; });
+      console.log('LINE_DEBUG: Signature failed', JSON.stringify({
+        hasSignature: !!signature,
+        signaturePrefix: signature?.slice(0, 20),
+        hasChannelSecret: !!channelSecret,
+        secretPrefix: channelSecret.slice(0, 8),
+        bodyLength: body.length,
+        bodyPrefix: body.slice(0, 200),
+        headers: allHeaders,
+      }));
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
