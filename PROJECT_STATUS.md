@@ -6,14 +6,14 @@
 
 ## 一、專案概覽
 
-| 項目         | 資訊                                                           |
-| ------------ | -------------------------------------------------------------- |
-| 專案名稱     | 螞蟻窩甜點 AI 客服聊天機器人                                   |
-| 目標         | 為螞蟻窩甜點（ANT NEST）提供智能客服 + 預約系統 + 營運管理後台 |
-| GitHub       | https://github.com/stantheman0128/antnest-chatbot              |
+| 項目         | 資訊                                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| 專案名稱     | 螞蟻窩甜點 AI 客服聊天機器人                                                                                                 |
+| 目標         | 為螞蟻窩甜點（ANT NEST）提供智能客服 + 預約系統 + 營運管理後台                                                               |
+| GitHub       | https://github.com/stantheman0128/antnest-chatbot                                                                            |
 | 線上版       | **Production**: https://antnest-chatbot-0410.zeabur.app (Zeabur) ／ **Preview**: https://antnest-chatbot.vercel.app (Vercel) |
-| LINE Bot     | 已串接，production 使用中                                      |
-| 總 Commit 數 | 111                                                            |
+| LINE Bot     | 已串接，production 使用中                                                                                                    |
+| 總 Commit 數 | 111                                                                                                                          |
 
 ---
 
@@ -36,15 +36,15 @@ Tier 2：AI 生成回答
 
 ### 技術棧
 
-| 類別    | 技術                                                       |
-| ------- | ---------------------------------------------------------- |
-| 框架    | Next.js 16 (App Router) + TypeScript + Tailwind CSS v4     |
-| AI 模型 | Google Gemini 3.1 Flash-Lite Preview（主） + auto-failover |
-| 資料庫  | Supabase (PostgreSQL)                                      |
-| 認證    | JWT (jose, 2h expiry) + rate limiting                      |
-| LINE    | @line/bot-sdk + @line/liff                                 |
-| 部署    | **Zeabur**（production，手動 `zeabur deploy`）＋ Vercel（preview，push main 自動）|
-| Cron    | Upstash QStash — 每週一 20:05 TST (12:05 UTC) 自動同步 Cyberbiz 產品 |
+| 類別    | 技術                                                                               |
+| ------- | ---------------------------------------------------------------------------------- |
+| 框架    | Next.js 16 (App Router) + TypeScript + Tailwind CSS v4                             |
+| AI 模型 | Google Gemini 3.1 Flash-Lite Preview（主） + auto-failover                         |
+| 資料庫  | Supabase (PostgreSQL)                                                              |
+| 認證    | JWT (jose, 2h expiry) + rate limiting                                              |
+| LINE    | @line/bot-sdk + @line/liff                                                         |
+| 部署    | **Zeabur**（production，手動 `zeabur deploy`）＋ Vercel（preview，push main 自動） |
+| Cron    | Upstash QStash — 每週一 20:05 TST (12:05 UTC) 自動同步 Cyberbiz 產品               |
 
 ---
 
@@ -428,10 +428,12 @@ npm run dev  # localhost:3000
 > **Production = Zeabur**（手動部署，push 到 GitHub 不會自動上線）。Vercel 只是 preview，**不接真實流量**。
 
 **Zeabur (Production)** — LINE webhook 指這裡，所有真實客戶流量
+
 - URL：https://antnest-chatbot-0410.zeabur.app
 - 手動部署：`zeabur deploy --project-id 69d9080ee8ec40d5bceac2c7 --service-id 69d90817e8ec40d5bceac2ca --name antnest-chatbot`
 
 **Vercel (Preview/Staging)**
+
 - URL：https://antnest-chatbot.vercel.app
 - push main 自動部署，用來在 Zeabur deploy 前驗證改動
 - ⚠️ 不要把 LINE webhook 指這裡
