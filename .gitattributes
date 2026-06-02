@@ -1,2 +1,10 @@
 # Normalize all text files to LF in the repo
 * text=auto eol=lf
+
+# Git hooks and shell scripts MUST stay LF.
+# On Windows (core.autocrlf=true), a CRLF line ending in a hook — or even just
+# a CRLF in the `#!/bin/sh` shebang — makes git's hook exec fail with
+# "cannot spawn .husky/pre-commit: Exec format error". Force LF explicitly so
+# husky hooks always run regardless of the contributor's platform.
+.husky/** text eol=lf
+*.sh text eol=lf
