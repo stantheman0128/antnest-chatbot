@@ -16,8 +16,8 @@
 
 ## Phase 2：快速優化
 
-- [ ] 2A — ESLint + Prettier 🤖
-- [ ] 2B — husky + lint-staged 🤖 ← 依賴 2A
+- [x] 2A — ESLint + Prettier 🤖
+- [x] 2B — husky + lint-staged 🤖 ← 依賴 2A
 - [ ] 2C — TypeScript 加嚴 🤖 ← 依賴 2A
 - [ ] 2D — 架構流程圖 Mermaid 🤖
 - [ ] 2E — Prompt 架構重構（XML 隔離）🤖
@@ -27,9 +27,9 @@
 
 ## Phase 3：系統升級
 
-- [ ] 3A — GitHub Actions CI 🤖 ← 依賴 2A
+- [x] 3A — GitHub Actions CI 🤖 ← 依賴 2A
 - [ ] 3B — Vitest 測試框架 🤖 ← 依賴 3A
-- [ ] 3C — Dependabot 🤖
+- [x] 3C — Dependabot 🤖
 - [ ] 3D — Supabase Migrations 🤖
 - [ ] 3E — 推播通知系統 🤖
 - [ ] 3F — Sentry 錯誤追蹤 🤝
