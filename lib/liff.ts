@@ -10,7 +10,7 @@ export interface LiffProfile {
 
 export type LiffState =
   | { status: 'loading' }
-  | { status: 'ready'; profile: LiffProfile; isInClient: boolean }
+  | { status: 'ready'; profile: LiffProfile; isInClient: boolean; idToken: string | null }
   | { status: 'error'; error: string };
 
 let liffInstance: typeof Liff | null = null;
@@ -56,6 +56,15 @@ export async function getLiffProfile(): Promise<LiffProfile> {
     displayName: profile.displayName,
     pictureUrl: profile.pictureUrl || undefined,
   };
+}
+
+/**
+ * Get the LIFF ID token (a signed JWT) to send to our backend for verification.
+ * Requires the LIFF app to have the `openid` scope. Returns null if unavailable.
+ */
+export async function getLiffIdToken(): Promise<string | null> {
+  const liff = await initLiff();
+  return liff.getIDToken();
 }
 
 /**

@@ -1,11 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { createReservation, getAvailabilityById } from '@/lib/data-service';
+import { verifyLiffUser } from '@/lib/liff-auth';
+import { createRateLimiter } from '@/lib/rate-limiter';
+
+// Throttle booking spam per IP (in-memory, per-instance).
+const limiter = createRateLimiter({ max: 10, windowMs: 60 * 1000 });
+
+function clientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
+  );
+}
+
+const MAX_NAME = 100;
+const MAX_NOTE = 500;
+const MAX_ORDER = 100;
 
 export async function POST(req: NextRequest) {
+  if (!limiter.hit(clientIp(req), Date.now())) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+
+  // Reservations must be tied to a LINE identity verified server-side.
+  const lineUserId = await verifyLiffUser(req);
+  if (!lineUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const {
     availabilityId,
-    lineUserId,
     displayName,
     pickupTime,
     orderNumber,
@@ -14,7 +40,6 @@ export async function POST(req: NextRequest) {
     flexiblePeriod,
   } = (await req.json()) as {
     availabilityId: string;
-    lineUserId?: string;
     displayName: string;
     pickupTime: string;
     orderNumber?: string;
@@ -29,6 +54,13 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+  if (
+    displayName.length > MAX_NAME ||
+    (note?.length ?? 0) > MAX_NOTE ||
+    (orderNumber?.length ?? 0) > MAX_ORDER
+  ) {
+    return NextResponse.json({ error: 'Input too long' }, { status: 400 });
+  }
 
   // Verify availability exists and has capacity
   const avail = await getAvailabilityById(availabilityId);
@@ -39,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   const reservation = await createReservation({
     availabilityId,
-    lineUserId: lineUserId || undefined,
+    lineUserId,
     displayName: displayName.trim(),
     pickupTime,
     orderNumber: orderNumber?.trim() || undefined,

@@ -92,11 +92,12 @@ export default function LiffBookingPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const { initLiff, getLiffProfile, isInClient } = await import('@/lib/liff');
+        const { initLiff, getLiffProfile, getLiffIdToken, isInClient } = await import('@/lib/liff');
         await initLiff();
         const profile = await getLiffProfile();
         const inClient = await isInClient();
-        setLiffState({ status: 'ready', profile, isInClient: inClient });
+        const idToken = await getLiffIdToken();
+        setLiffState({ status: 'ready', profile, isInClient: inClient, idToken });
         setForm((f) => ({ ...f, displayName: profile.displayName }));
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'LIFF 初始化失敗';
@@ -121,7 +122,9 @@ export default function LiffBookingPage() {
     if (liffState.status !== 'ready') return;
     setLoadingRes(true);
     try {
-      const res = await fetch(`/api/liff/reservations?lineUserId=${liffState.profile.userId}`);
+      const res = await fetch('/api/liff/reservations', {
+        headers: { Authorization: `Bearer ${liffState.idToken ?? ''}` },
+      });
       if (res.ok) setReservations((await res.json()) as Reservation[]);
     } catch {
       /* ignore */
@@ -151,10 +154,12 @@ export default function LiffBookingPage() {
     try {
       const res = await fetch('/api/booking/reserve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${liffState.idToken ?? ''}`,
+        },
         body: JSON.stringify({
           availabilityId: selected.id,
-          lineUserId: liffState.profile.userId,
           displayName: form.displayName.trim(),
           pickupTime: selected.startTime.slice(0, 5),
           bookingType: 'flexible',
@@ -190,10 +195,12 @@ export default function LiffBookingPage() {
     try {
       const res = await fetch('/api/liff/reservations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${liffState.idToken ?? ''}`,
+        },
         body: JSON.stringify({
           reservationId,
-          lineUserId: liffState.profile.userId,
           action: 'cancel',
         }),
       });
@@ -212,14 +219,16 @@ export default function LiffBookingPage() {
     if (liffState.status !== 'ready') return;
     setActionLoading(reservationId);
     try {
-      const userId = liffState.profile.userId;
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${liffState.idToken ?? ''}`,
+      };
       // Update note
       await fetch('/api/liff/reservations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           reservationId,
-          lineUserId: userId,
           action: 'update_note',
           value: editForm.note,
         }),
@@ -227,10 +236,9 @@ export default function LiffBookingPage() {
       // Update order number
       await fetch('/api/liff/reservations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           reservationId,
-          lineUserId: userId,
           action: 'update_order',
           value: editForm.orderNumber,
         }),

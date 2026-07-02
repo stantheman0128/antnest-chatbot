@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — 2026-07-02
+
+安全修正(CRITICAL):LIFF 預約端點改用伺服器端驗證的 LINE 身分,堵住 IDOR。
+
+- 新增 `lib/liff-auth-core.ts`(抽 Bearer、驗 LINE verify 回應,含測試)與 `lib/liff-auth.ts`(`verifyLiffUser`:打 LINE `/oauth2/v2.1/verify` 驗 ID token、核對 aud=channel、回可信 `sub`)。
+- `/api/liff/reservations`(GET/PATCH)與 `/api/booking/reserve` 不再信任 client 傳來的 `lineUserId`,改用驗過的 userId 做查詢與擁有權判斷;`reserve` 另加每 IP 限流與欄位長度上限。
+- 前端 `app/liff/booking/page.tsx` 改以 `liff.getIDToken()` 帶 `Authorization: Bearer <token>`;`lib/liff.ts` 新增 `getLiffIdToken`。
+- 需設定 `LINE_LOGIN_CHANNEL_ID`(未設會退用 LIFF ID 前綴,仍建議顯式設定);LIFF app 需啟用 `openid` scope,否則 `getIDToken` 為 null、請求會被擋。上線前需真機測試 LIFF 流程。
+
 ## 1.0.1 — 2026-07-02
 
 測試基建與共用安全工具。

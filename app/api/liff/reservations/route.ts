@@ -7,35 +7,37 @@ import {
   updateReservationOrderNumber,
   updateReservationStatus,
 } from '@/lib/data-service';
+import { verifyLiffUser } from '@/lib/liff-auth';
 
-/** GET: list a user's active reservations */
+/** GET: list the authenticated user's active reservations */
 export async function GET(req: NextRequest) {
-  const lineUserId = req.nextUrl.searchParams.get('lineUserId');
+  const lineUserId = await verifyLiffUser(req);
   if (!lineUserId) {
-    return NextResponse.json({ error: 'lineUserId is required' }, { status: 400 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const reservations = await getReservationsByUser(lineUserId);
   return NextResponse.json(reservations);
 }
 
-/** PATCH: cancel or modify a reservation (ownership verified) */
+/** PATCH: cancel or modify a reservation (ownership verified against LINE identity) */
 export async function PATCH(req: NextRequest) {
-  const { reservationId, lineUserId, action, value } = (await req.json()) as {
+  const lineUserId = await verifyLiffUser(req);
+  if (!lineUserId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { reservationId, action, value } = (await req.json()) as {
     reservationId: string;
-    lineUserId: string;
     action: string;
     value?: string;
   };
 
-  if (!reservationId || !lineUserId || !action) {
-    return NextResponse.json(
-      { error: 'reservationId, lineUserId, and action are required' },
-      { status: 400 },
-    );
+  if (!reservationId || !action) {
+    return NextResponse.json({ error: 'reservationId and action are required' }, { status: 400 });
   }
 
-  // Ownership verification
+  // Ownership verification against the token-verified userId, not client input
   const reservation = await getReservationById(reservationId);
   if (!reservation) {
     return NextResponse.json({ error: 'Reservation not found' }, { status: 404 });
