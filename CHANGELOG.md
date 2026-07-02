@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.10 — 2026-07-02
+
+拆薄 admin 系統設定頁:各區塊抽成子元件,page.tsx 只留狀態與 save handler。
+
+- `app/admin/settings/page.tsx` 由 691 行縮到 253 行,保留 configs/users state、fetch 與所有 save handler。
+- 抽出 `app/admin/settings/constants.ts`(型別、config keys、`CONFIG_MAX_LENGTHS`、`SUSPICIOUS_PATTERNS`/`hasSuspiciousContent`、`CONFIG_SECTIONS`、`MODEL_FIELDS`/`MODEL_DEFAULTS`)與 `components/`(`ModelConfigSection`、`AutomationSection`、`ConfigSectionsList`、`EditConfigModal`)。
+- 內嵌的 onChange/onClick 匿名邏輯抽成具名 handler(`selectModel`/`resetModels`/`toggleAutoSync`),toast 文案與 reset 預設值逐字保留(含 failover/summary reset 用 flash-lite 的既有差異)。UI 與行為零變動、不動 API。`tsc`、`next build`、25 測試皆綠。
+
 ## 1.0.9 — 2026-07-02
 
 拆薄 admin 取貨管理頁:JSX 抽成子元件,page.tsx 只留狀態與資料流。
