@@ -33,6 +33,10 @@ export async function GET(req: NextRequest) {
   // Run the sync directly — no internal HTTP hop, no ADMIN_SECRET as a bearer token.
   try {
     const result = await runProductSync();
+    if (!result.ok) {
+      console.warn('[Cron] Auto-sync failed:', result.error);
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
     console.log('[Cron] Auto-sync completed:', result);
     return NextResponse.json(result);
   } catch (error) {
