@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // ── Mocks for external dependencies ──────────────────────────────
 // The LINE SDK: validateSignature is called by POST; Client.replyMessage
 // is the sink we inspect to see what the bot sent back.
-const replyMessage = vi.fn(async () => ({}));
-const validateSignature = vi.fn(() => true);
+const replyMessage = vi.fn(async (..._args: unknown[]) => ({}));
+const validateSignature = vi.fn((..._args: unknown[]) => true);
 
 vi.mock('@line/bot-sdk', () => ({
   validateSignature: (...args: unknown[]) => validateSignature(...args),
@@ -34,21 +34,21 @@ const setConfig = vi.fn(async (k: string, v: string) => {
 const deleteConfig = vi.fn(async (k: string) => {
   configStore.delete(k);
 });
-const getAvailableDates = vi.fn(async () => [] as unknown[]);
-const getAvailabilityById = vi.fn(async () => null as unknown);
-const getReservationById = vi.fn(async () => null as unknown);
-const getLatestReservationByUser = vi.fn(async () => null as unknown);
-const createReservation = vi.fn(async () => null as unknown);
-const updateReservationStatus = vi.fn(async () => {});
-const updateReservationNote = vi.fn(async () => {});
-const getConversationHistory = vi.fn(async () => [] as unknown[]);
-const logConversation = vi.fn(async () => {});
-const upsertLineUser = vi.fn(async () => {});
+const getAvailableDates = vi.fn(async (..._args: unknown[]) => [] as unknown[]);
+const getAvailabilityById = vi.fn(async (..._args: unknown[]) => null as unknown);
+const getReservationById = vi.fn(async (..._args: unknown[]) => null as unknown);
+const getLatestReservationByUser = vi.fn(async (..._args: unknown[]) => null as unknown);
+const createReservation = vi.fn(async (..._args: unknown[]) => null as unknown);
+const updateReservationStatus = vi.fn(async (..._args: unknown[]) => {});
+const updateReservationNote = vi.fn(async (..._args: unknown[]) => {});
+const getConversationHistory = vi.fn(async (..._args: unknown[]) => [] as unknown[]);
+const logConversation = vi.fn(async (..._args: unknown[]) => {});
+const upsertLineUser = vi.fn(async (..._args: unknown[]) => {});
 
 vi.mock('@/lib/data-service', () => ({
-  getConfig: (...a: unknown[]) => getConfig(...(a as [string])),
-  setConfig: (...a: unknown[]) => setConfig(...(a as [string, string])),
-  deleteConfig: (...a: unknown[]) => deleteConfig(...(a as [string])),
+  getConfig: (k: string) => getConfig(k),
+  setConfig: (k: string, v: string) => setConfig(k, v),
+  deleteConfig: (k: string) => deleteConfig(k),
   getAvailableDates: (...a: unknown[]) => getAvailableDates(...a),
   getAvailabilityById: (...a: unknown[]) => getAvailabilityById(...a),
   getReservationById: (...a: unknown[]) => getReservationById(...a),
@@ -106,7 +106,7 @@ function postbackEvent(data: string, userId: string | undefined = 'U_test', time
 
 /** Flattened list of every message object passed to replyMessage across all calls. */
 function sentMessages(): Array<Record<string, unknown>> {
-  return replyMessage.mock.calls.flatMap((call) => call[1] as Record<string, unknown>[]);
+  return replyMessage.mock.calls.flatMap((call) => (call[1] ?? []) as Record<string, unknown>[]);
 }
 
 beforeEach(() => {

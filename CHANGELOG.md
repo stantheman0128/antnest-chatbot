@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.8 — 2026-07-02
+
+拆分 LINE webhook route:handler 抽成獨立模組,route.ts 只留簽章驗證與分派。
+
+- `app/api/line/webhook/route.ts` 由 839 行縮到 57 行,只保留 `POST`(簽章驗證 + dedup + event 分派)。
+- handler 移到 `app/api/line/webhook/handlers/`:`shared.ts`(LINE client、sendMessages、profile、啟用狀態、dedup、pickup 訊息builder)、`text-message.ts`(`handleTextMessage`)、`postback.ts`(`handlePostback` 與日期/時間/時段子handler)。
+- 純搬移,行為零變動;禁區 lib 只 import 不改,API contract 不動。特徵測試 25 個仍全綠、`tsc --noEmit` 與 `next build` 皆過。
+- 順帶修掉 1.0.7 測試檔的 mock 型別(spread 參數缺 rest target),讓 `tsc` 乾淨。
+
 ## 1.0.7 — 2026-07-02
 
 建立測試基建,為 LINE webhook 現有行為補上特徵測試。
