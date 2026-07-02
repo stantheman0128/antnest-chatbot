@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.3 — 2026-07-02
+
+安全修正:移除 admin 萬用金鑰後門,cron 不再自打 HTTP。
+
+- 抽出 `lib/product-sync.ts`(`runProductSync` / `syncSingleProduct`),`/api/admin/scrape` 變薄殼、`/api/cron/sync` 直接呼叫,不再對自身發 HTTP、不再用 `ADMIN_SECRET` 當 bearer。
+- `lib/admin-auth.ts` 移除 `token === ADMIN_SECRET` 的永久後門(徹底抵銷 JWT 效期/撤銷的那條),admin API 只認短效 JWT;登入的 email/password 比對改用 `safeEqualStr`。
+- cron 授權維持既有的 `CRON_SECRET`;機器憑證與人類憑證分離。
+
 ## 1.0.2 — 2026-07-02
 
 安全修正(CRITICAL):LIFF 預約端點改用伺服器端驗證的 LINE 身分,堵住 IDOR。

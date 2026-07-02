@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { SignJWT, jwtVerify } from 'jose';
 
+import { safeEqualStr } from './safe-equal';
+
 const JWT_EXPIRY = '2h';
 
 function getSecret() {
@@ -26,9 +28,9 @@ export async function verifyAdmin(req: NextRequest): Promise<NextResponse | null
     await jwtVerify(token, getSecret());
     return null; // Valid
   } catch {
-    // Fallback: accept raw ADMIN_SECRET for backward compatibility
-    // (cron jobs, existing sessions before JWT migration)
-    if (token === process.env.ADMIN_SECRET) return null;
+    // Admin API accepts only short-lived JWTs. The old raw-ADMIN_SECRET fallback
+    // (a permanent, unrevocable master key) was removed; cron now calls
+    // runProductSync() directly instead of hitting this route with the secret.
     return NextResponse.json({ error: 'Token expired or invalid' }, { status: 401 });
   }
 }
@@ -43,7 +45,12 @@ export async function verifyAdminLogin(
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
 
-  if (email === adminEmail && password === adminPassword) {
+  if (
+    adminEmail &&
+    adminPassword &&
+    safeEqualStr(email, adminEmail) &&
+    safeEqualStr(password, adminPassword)
+  ) {
     const token = await new SignJWT({ role: 'admin' })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
