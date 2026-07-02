@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.9 — 2026-07-02
+
+拆薄 admin 取貨管理頁:JSX 抽成子元件,page.tsx 只留狀態與資料流。
+
+- `app/admin/pickup/page.tsx` 由 814 行縮到 344 行,保留 state、fetch、handler 與衍生值,當容器組裝子元件。
+- 抽出 `app/admin/pickup/constants.ts`(型別、label map、`formatDate`/`getDaysInMonth`/`getTimeDisplay` 純函式)與 `components/`(`UpcomingTab`、`DatesTab`、`ReservationsTab`、`ManualAddModal` 純呈現元件,靠 props 傳入)。
+- UI 與行為零變動、不動 API。`tsc --noEmit`、`next build`、25 個 webhook 測試皆綠。
+
 ## 1.0.8 — 2026-07-02
 
 拆分 LINE webhook route:handler 抽成獨立模組,route.ts 只留簽章驗證與分派。
