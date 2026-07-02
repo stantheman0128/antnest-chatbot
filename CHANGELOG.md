@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.7 — 2026-07-02
+
+建立測試基建,為 LINE webhook 現有行為補上特徵測試。
+
+- 加入 `vitest`(devDependency `^4.1.9`)與 `npm test`(`vitest run`)。`vitest.config.ts` 內容與 `security/audit-fixes-2026-07-02` 分支逐位元組一致,合併時 add/add 可自動解決。
+- 新增 `tests/line-webhook.test.ts`:針對 `app/api/line/webhook/route.ts` 的簽章驗證、事件分派(dedup、event type)、代表性文字/postback handler 行為寫特徵測試,外部依賴(LINE SDK、Supabase 資料層、AI client)全 mock。25 個測試綠。
+- 以突變測試(mutation test)確認測試會咬:蓄意破壞簽章拒絕與 handoff 文案,對應測試如期轉紅。route.ts 行為零修改,僅為後續重構鋪安全網。
+
 ## 1.0.6 — 2026-07-02
 
 整頓 repo 根目錄:一次性爬蟲腳本歸檔。
