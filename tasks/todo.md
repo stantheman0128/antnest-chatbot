@@ -28,14 +28,14 @@
 ## Phase 3：系統升級
 
 - [x] 3A — GitHub Actions CI 🤖 ← 依賴 2A
-- [ ] 3B — Vitest 測試框架 🤖 ← 依賴 3A
+- [x] 3B — Vitest 測試框架 🤖 ← 依賴 3A
 - [x] 3C — Dependabot 🤖
 - [ ] 3D — Supabase Migrations 🤖
 - [ ] 3E — 推播通知系統 🤖
-- [ ] 3F — Sentry 錯誤追蹤 🤝
+- [x] 3F — Sentry 錯誤追蹤 🤝
 - [ ] 3G — RAG 語意檢索 🤝 ← 依賴 2E
 - [ ] 3H — Reflexion 反饋機制 🤝 ← 依賴 3G
-- [ ] 3I — Vercel Analytics 👤
+- [ ] 3I — Vercel Analytics 👤（套件已裝，但 `<Analytics />` 尚未掛進 layout、Vercel Dashboard 尚未開通）
 - [ ] 3J — POS 系統 Figma 設計 👤
 
 ## Phase 4：POS 系統（獨立專案）
