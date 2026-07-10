@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.11 — 2026-07-10
+
+依賴弱點修補與環境變數文件校正。
+
+- `npm audit fix`(未加 `--force`):弱點 18 個(1 low/12 moderate/5 high,含 ws GHSA-58qx-3vcg-4xpx 未初始化記憶體揭露)降到 2 moderate。僅 `package-lock.json` 在 semver 範圍內升版;剩餘 2 個是 next 內嵌的 postcss,只能靠 `--force` 降級 next@9 才能修,不做。39 個測試與 `next build` 皆綠。
+- `.env.example` 對齊程式碼實際讀取的變數:`ADMIN_USERNAME`(無程式讀取)改為 `ADMIN_EMAIL`(`lib/admin-auth.ts` 實際使用);補上缺漏的 `SUPABASE_SERVICE_ROLE_KEY`(`lib/supabase.ts` 用 service role 而非 anon key)、`CALENDAR_SECRET`(`/api/calendar/feed`)、`SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN`;移除程式碼未使用的 `NEXT_PUBLIC_SUPABASE_ANON_KEY`。
+- `tasks/todo.md` 同步實況:3B Vitest、3F Sentry 勾為完成(基建已在 codebase);3I 註記套件已裝但 `<Analytics />` 未掛載、Dashboard 開通待辦。
+
 ## 1.0.10 — 2026-07-02
 
 拆薄 admin 系統設定頁:各區塊抽成子元件,page.tsx 只留狀態與 save handler。
