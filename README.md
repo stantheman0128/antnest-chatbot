@@ -98,6 +98,10 @@ Push to `main` branch → Vercel 自動 build & deploy。
 - [PROJECT_STATUS.md](./PROJECT_STATUS.md) — 完整進度、架構、roadmap
 - [tasks/pos-system-plan.md](./tasks/pos-system-plan.md) — POS 系統開發計畫
 
+## 開發者
+
+由 [Stan Shih（施博瀚 / Po-Han Shih）](https://stan-shih.com/) 開發。
+
 ## License
 
 MIT
